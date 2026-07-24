@@ -1,0 +1,16 @@
+{
+  "name": "卡片保險箱 Card Vault",
+  "short_name": "卡片保險箱",
+  "description": "本機加密儲存的信用卡資料庫,離線運作,不連網路",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#10131A",
+  "theme_color": "#10131A",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
