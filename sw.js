@@ -1,6 +1,6 @@
 // Bump this on every release so updated assets actually reach installed
 // devices — same convention as jaxmoney (CACHE_NAME -> vN).
-const CACHE_NAME = "cardvault-shell-v17";
+const CACHE_NAME = "cardvault-shell-v18";
 const ASSETS = [
   "./",
   "./index.html",

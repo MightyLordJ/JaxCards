@@ -162,14 +162,6 @@ async function ensureAutoKey() {
 }
 
 // ---------- Vault (main list) ----------
-function detectBrand(numberDigits) {
-  if (/^4/.test(numberDigits)) return { name: "VISA", grad: "linear-gradient(135deg,#1c3a63,#2a5aa0)" };
-  if (/^5[1-5]/.test(numberDigits) || /^2(2[2-9]|[3-6]\d|7[01]|720)/.test(numberDigits)) return { name: "Mastercard", grad: "linear-gradient(135deg,#5c1f1f,#a1421f)" };
-  if (/^35/.test(numberDigits)) return { name: "JCB", grad: "linear-gradient(135deg,#173d2c,#1f6b45)" };
-  if (/^3[47]/.test(numberDigits)) return { name: "AMEX", grad: "linear-gradient(135deg,#33255c,#5b3a99)" };
-  if (/^6/.test(numberDigits)) return { name: "Discover/其他", grad: "linear-gradient(135deg,#173a3d,#1f6b6b)" };
-  return { name: "卡片", grad: "linear-gradient(135deg,#232838,#171b24)" };
-}
 function formatNumberFull(digits) {
   return digits.replace(/(.{4})/g, "$1 ").trim();
 }
@@ -236,7 +228,6 @@ async function openDetail(id) {
   let data;
   try { data = await decryptJSON(card.iv, card.cipher, sessionKey); }
   catch (e) { toast("解密失敗"); return; }
-  const brand = detectBrand(data.number || "");
 
   // Dot placement signals the DECODE operation, not the raw offset sign:
   // offset > 0 means displayed = real + offset, so getting back to the
@@ -257,7 +248,6 @@ async function openDetail(id) {
   $("detail-content").innerHTML = `
     <div class="detail-card">
       <div class="nickname">${escapeHtml(data.nickname || "未命名卡片")}</div>
-      <div class="bank">${brand.name}</div>
       <div class="numberline mono">
         <span>${formatNumberFull(data.number || "")}</span>
         <button class="copy-btn" id="copy-btn" aria-label="複製卡號">
