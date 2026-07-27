@@ -175,7 +175,7 @@
   .note-box{ font-size:14px; margin-top:6px; white-space:pre-wrap; color:var(--text); opacity:.9; }
   .copy-hint{ font-size:11.5px; color:var(--muted); text-align:center; margin-top:6px; }
 
-  .photo-preview{ width:100%; height:110px; border-radius:12px; border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:13px; overflow:hidden; margin-bottom:10px; background:var(--surface); }
+  .photo-preview{ width:100%; aspect-ratio:1.586/1; border-radius:12px; border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:13px; overflow:hidden; margin-bottom:10px; background:var(--surface); }
   .photo-preview img{ width:100%; height:100%; object-fit:cover; }
 
   .toast{
@@ -225,7 +225,7 @@
     <div class="topbar">
       <h1>JaxCards</h1>
       <div style="display:flex;align-items:center;gap:10px;">
-        <span class="version">V1.4.0</span>
+        <span class="version">V1.4.1</span>
         <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -267,7 +267,7 @@
     <h2 id="form-title">新增卡片</h2>
     <div class="photo-preview" id="photo-preview">尚未選擇卡面縮圖(選填)</div>
     <input type="file" accept="image/*" id="photo-input" class="hidden" />
-    <div class="field"><label>卡片暱稱</label><input id="f-nickname" placeholder="例如：國泰無限卡" /></div>
+    <div class="field"><label>卡片暱稱</label><input id="f-nickname" placeholder="台銀Visa卡" /></div>
     <div class="field">
       <label>卡號</label>
       <input id="f-number" class="mono" inputmode="numeric" maxlength="19" placeholder="1234 5678 9012 3456" />
@@ -280,9 +280,9 @@
     </div>
     <div class="field">
       <label>CVV 🔒</label>
-      <input id="f-cvv" class="mono" inputmode="numeric" maxlength="4" placeholder="3-4 碼" />
+      <input id="f-cvv" class="mono" inputmode="numeric" maxlength="4" />
     </div>
-    <div class="field"><label>備註</label><textarea id="f-note" placeholder="自由備註"></textarea></div>
+    <div class="field"><label>備註</label><textarea id="f-note"></textarea></div>
     <div class="sheet-actions">
       <button class="btn" id="form-cancel-btn">取消</button>
       <button class="btn primary" id="form-save-btn">儲存</button>

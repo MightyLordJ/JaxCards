@@ -370,16 +370,56 @@ $("photo-input").addEventListener("change", handlePhotoFile);
 // moves and scales the photo underneath it rather than resizing a box. This
 // mirrors how most phone photo pickers already work and is much simpler to
 // get right on touch than a resizable crop rectangle.
-let cropImg = null;
+//
+// IMPORTANT: a raw phone camera photo can be 4000x3000px+ (several MB
+// decoded). Continuously CSS-transforming (pan/zoom) a DOM <img> at that
+// full resolution on every touch-move is what was freezing/crashing the
+// page. So before anything touches the DOM, the photo is decoded once and
+// redrawn onto an offscreen "working" canvas capped at 1400px on its long
+// side — plenty for a 640px final output — and everything below (display,
+// pan/zoom, final crop) operates on that much lighter canvas instead.
+let cropSourceCanvas = null;
+let cropImgW = 0, cropImgH = 0;
 let cropScale = 1, cropMinScale = 1, cropTX = 0, cropTY = 0;
 let cropVW = 0, cropVH = 0;
 const cropPointers = new Map();
 let cropPinchStartDist = 0, cropPinchStartScale = 1;
 let cropPanStart = null;
 
+async function loadDownscaledCanvas(file, maxDim) {
+  let source, w, h;
+  if (window.createImageBitmap) {
+    try {
+      const bitmap = await createImageBitmap(file);
+      source = bitmap; w = bitmap.width; h = bitmap.height;
+    } catch (e) { /* fall through to the <img>-based path below */ }
+  }
+  if (!source) {
+    source = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = reader.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    w = source.naturalWidth; h = source.naturalHeight;
+  }
+  const scale = Math.min(1, maxDim / Math.max(w, h));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(w * scale));
+  canvas.height = Math.max(1, Math.round(h * scale));
+  canvas.getContext("2d").drawImage(source, 0, 0, canvas.width, canvas.height);
+  if (source.close) source.close(); // release the ImageBitmap's decoded memory
+  return canvas;
+}
+
 function cropClamp() {
-  const dispW = cropImg.naturalWidth * cropScale;
-  const dispH = cropImg.naturalHeight * cropScale;
+  const dispW = cropImgW * cropScale;
+  const dispH = cropImgH * cropScale;
   cropTX = Math.min(0, Math.max(cropVW - dispW, cropTX));
   cropTY = Math.min(0, Math.max(cropVH - dispH, cropTY));
 }
@@ -388,30 +428,26 @@ function cropApply() {
   $("crop-img").style.transform = `translate(${cropTX}px, ${cropTY}px) scale(${cropScale})`;
 }
 
-function openCropScreen(file) {
-  const reader = new FileReader();
-  reader.onload = () => {
-    const img = new Image();
-    img.onload = () => {
-      cropImg = img;
-      $("crop-backdrop").classList.remove("hidden");
-      // Size the crop window to fit the screen, keeping the card's 1.586:1 ratio.
-      cropVW = Math.min(340, window.innerWidth - 48);
-      cropVH = Math.round(cropVW / 1.586);
-      $("crop-viewport").style.width = cropVW + "px";
-      $("crop-viewport").style.height = cropVH + "px";
-      // Start at "cover" scale (image fills the crop window with no gaps),
-      // centered — this is also the minimum zoom allowed.
-      cropMinScale = Math.max(cropVW / img.naturalWidth, cropVH / img.naturalHeight);
-      cropScale = cropMinScale;
-      cropTX = (cropVW - img.naturalWidth * cropScale) / 2;
-      cropTY = (cropVH - img.naturalHeight * cropScale) / 2;
-      $("crop-img").src = img.src;
-      cropApply();
-    };
-    img.src = reader.result;
-  };
-  reader.readAsDataURL(file);
+async function openCropScreen(file) {
+  const workCanvas = await loadDownscaledCanvas(file, 1400);
+  cropSourceCanvas = workCanvas;
+  cropImgW = workCanvas.width;
+  cropImgH = workCanvas.height;
+
+  $("crop-backdrop").classList.remove("hidden");
+  // Size the crop window to fit the screen, keeping the card's 1.586:1 ratio.
+  cropVW = Math.min(340, window.innerWidth - 48);
+  cropVH = Math.round(cropVW / 1.586);
+  $("crop-viewport").style.width = cropVW + "px";
+  $("crop-viewport").style.height = cropVH + "px";
+  // Start at "cover" scale (image fills the crop window with no gaps),
+  // centered — this is also the minimum zoom allowed.
+  cropMinScale = Math.max(cropVW / cropImgW, cropVH / cropImgH);
+  cropScale = cropMinScale;
+  cropTX = (cropVW - cropImgW * cropScale) / 2;
+  cropTY = (cropVH - cropImgH * cropScale) / 2;
+  $("crop-img").src = workCanvas.toDataURL("image/jpeg", 0.85);
+  cropApply();
 }
 
 function cropPointerDist(pts) {
@@ -459,7 +495,7 @@ $("crop-viewport").addEventListener("wheel", (e) => {
   cropApply();
 }, { passive: false });
 
-$("crop-cancel-btn").onclick = () => { $("crop-backdrop").classList.add("hidden"); cropImg = null; };
+$("crop-cancel-btn").onclick = () => { $("crop-backdrop").classList.add("hidden"); cropSourceCanvas = null; };
 $("crop-done-btn").onclick = () => {
   const outW = 640, outH = Math.round(outW / 1.586);
   const sx = -cropTX / cropScale;
@@ -468,13 +504,14 @@ $("crop-done-btn").onclick = () => {
   const sH = cropVH / cropScale;
   const canvas = document.createElement("canvas");
   canvas.width = outW; canvas.height = outH;
-  canvas.getContext("2d").drawImage(cropImg, sx, sy, sW, sH, 0, 0, outW, outH);
+  canvas.getContext("2d").drawImage(cropSourceCanvas, sx, sy, sW, sH, 0, 0, outW, outH);
   const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
   pendingPhotoDataUrl = dataUrl;
   $("photo-preview").innerHTML = `<img src="${dataUrl}" />`;
   $("crop-backdrop").classList.add("hidden");
-  cropImg = null;
+  cropSourceCanvas = null;
 };
+
 
 function cardNumberError(digits) {
   if (digits.length === 0) return "";
