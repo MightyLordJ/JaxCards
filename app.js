@@ -187,7 +187,12 @@ async function refreshCardList() {
     return;
   }
   empty.classList.add("hidden");
-  cards.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  cards.sort((a, b) => {
+    if (a.order != null && b.order != null) return a.order - b.order;
+    if (a.order != null) return -1;
+    if (b.order != null) return 1;
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
   for (const card of cards) {
     let data;
     try { data = await decryptJSON(card.iv, card.cipher, sessionKey); }
@@ -215,6 +220,108 @@ async function refreshCardList() {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
+
+// ---------- Reorder screen ----------
+// A simple vertical drag-to-reorder list. Only the handle icon on each row
+// is a drag target (touch-action:none there only), so the list still
+// scrolls normally when there are more cards than fit on screen. The DOM
+// order IS the source of truth while dragging — "完成" just reads back
+// each row's data-id in its final DOM position and writes an explicit
+// numeric `order` to every card.
+let reorderDragEl = null, reorderStartY = 0, reorderRowH = 0;
+
+async function openReorderScreen() {
+  const cards = await idbAll("cards");
+  cards.sort((a, b) => {
+    if (a.order != null && b.order != null) return a.order - b.order;
+    if (a.order != null) return -1;
+    if (b.order != null) return 1;
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
+  const list = $("reorder-list");
+  list.innerHTML = "";
+  for (const card of cards) {
+    let data;
+    try { data = await decryptJSON(card.iv, card.cipher, sessionKey); }
+    catch (e) { continue; }
+    const row = document.createElement("div");
+    row.className = "reorder-row";
+    row.dataset.id = card.id;
+    let thumbInner = `<span style="font-size:10px;text-align:center;padding:2px;">${escapeHtml((data.nickname || "").slice(0, 6))}</span>`;
+    if (card.photoCipher) {
+      try {
+        const photoUrl = await decryptString(card.photoIv, card.photoCipher, sessionKey);
+        thumbInner = `<img src="${photoUrl}" alt="" />`;
+      } catch (e) { /* fall back to the nickname chip above */ }
+    }
+    row.innerHTML = `
+      <div class="reorder-thumb">${thumbInner}</div>
+      <div class="reorder-name">${escapeHtml(data.nickname || "未命名卡片")}</div>
+      <div class="drag-handle" aria-label="拖曳排序">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" y1="8" x2="20" y2="8"/><line x1="4" y1="16" x2="20" y2="16"/>
+        </svg>
+      </div>`;
+    list.appendChild(row);
+  }
+  $("reorder-backdrop").classList.remove("hidden");
+}
+
+function reorderPointerDown(e) {
+  const row = e.currentTarget.closest(".reorder-row");
+  e.currentTarget.setPointerCapture(e.pointerId);
+  reorderDragEl = row;
+  reorderStartY = e.clientY;
+  reorderRowH = row.offsetHeight + 8; // + row's margin-bottom
+  row.classList.add("dragging");
+}
+function reorderPointerMove(e) {
+  if (!reorderDragEl) return;
+  const list = $("reorder-list");
+  let dy = e.clientY - reorderStartY;
+  let rows = [...list.children];
+  let idx = rows.indexOf(reorderDragEl);
+  while (dy < -reorderRowH / 2 && idx > 0) {
+    list.insertBefore(reorderDragEl, rows[idx - 1]);
+    reorderStartY -= reorderRowH;
+    dy = e.clientY - reorderStartY;
+    rows = [...list.children];
+    idx = rows.indexOf(reorderDragEl);
+  }
+  while (dy > reorderRowH / 2 && idx < rows.length - 1) {
+    list.insertBefore(rows[idx + 1], reorderDragEl);
+    reorderStartY += reorderRowH;
+    dy = e.clientY - reorderStartY;
+    rows = [...list.children];
+    idx = rows.indexOf(reorderDragEl);
+  }
+  reorderDragEl.style.transform = `translateY(${dy}px)`;
+}
+function reorderPointerEnd() {
+  if (!reorderDragEl) return;
+  reorderDragEl.style.transform = "";
+  reorderDragEl.classList.remove("dragging");
+  reorderDragEl = null;
+}
+$("reorder-list").addEventListener("pointerdown", (e) => {
+  if (e.target.closest(".drag-handle")) reorderPointerDown(e);
+});
+$("reorder-list").addEventListener("pointermove", reorderPointerMove);
+$("reorder-list").addEventListener("pointerup", reorderPointerEnd);
+$("reorder-list").addEventListener("pointercancel", reorderPointerEnd);
+
+$("reorder-btn").onclick = openReorderScreen;
+$("reorder-cancel-btn").onclick = () => $("reorder-backdrop").classList.add("hidden");
+$("reorder-done-btn").onclick = async () => {
+  const rows = [...$("reorder-list").children];
+  for (let i = 0; i < rows.length; i++) {
+    const id = Number(rows[i].dataset.id);
+    const card = await idbGet("cards", id);
+    if (card) { card.order = i; await idbPut("cards", card); }
+  }
+  $("reorder-backdrop").classList.add("hidden");
+  await refreshCardList();
+};
 
 // ---------- Detail sheet ----------
 let currentDetailId = null;
@@ -439,6 +546,30 @@ async function openCropScreen(file) {
   $("crop-img").src = workCanvas.toDataURL("image/jpeg", 0.85);
   cropApply();
 }
+
+function rotateCropPhoto() {
+  if (!cropSourceCanvas) return;
+  const src = cropSourceCanvas;
+  const rotated = document.createElement("canvas");
+  rotated.width = src.height;
+  rotated.height = src.width;
+  const ctx = rotated.getContext("2d");
+  ctx.translate(rotated.width / 2, rotated.height / 2);
+  ctx.rotate(Math.PI / 2); // 90deg clockwise
+  ctx.drawImage(src, -src.width / 2, -src.height / 2);
+  cropSourceCanvas = rotated;
+  cropImgW = rotated.width;
+  cropImgH = rotated.height;
+  // Re-center at cover scale, same as the initial load — panning/zoom from
+  // before the rotation doesn't map to anything sensible afterwards.
+  cropMinScale = Math.max(cropVW / cropImgW, cropVH / cropImgH);
+  cropScale = cropMinScale;
+  cropTX = (cropVW - cropImgW * cropScale) / 2;
+  cropTY = (cropVH - cropImgH * cropScale) / 2;
+  $("crop-img").src = rotated.toDataURL("image/jpeg", 0.85);
+  cropApply();
+}
+$("crop-rotate-btn").onclick = rotateCropPhoto;
 
 function cropPointerDist(pts) {
   const [a, b] = pts;

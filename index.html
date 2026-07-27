@@ -214,6 +214,38 @@
     position:absolute; bottom:calc(24px + env(safe-area-inset-bottom));
     left:0; right:0; text-align:center; color:var(--muted); font-size:12px;
   }
+
+  /* ---------- Reorder screen ---------- */
+  .reorder-screen{
+    position:fixed; inset:0; background:var(--bg); z-index:60;
+    display:flex; flex-direction:column;
+  }
+  .reorder-topbar{
+    display:flex; align-items:center; justify-content:space-between; flex:none;
+    padding: calc(14px + env(safe-area-inset-top)) 18px 14px;
+  }
+  .reorder-topbar .link{ font-size:15px; padding:6px 4px; }
+  .reorder-topbar .reorder-title{ font-size:14px; font-weight:600; color:var(--text); }
+  .reorder-list{
+    flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding:0 18px calc(18px + var(--bottom-safe));
+  }
+  .reorder-row{
+    display:flex; align-items:center; gap:12px; padding:8px;
+    background:var(--surface); border:1px solid var(--line); border-radius:12px;
+    margin-bottom:8px; position:relative;
+  }
+  .reorder-row.dragging{ z-index:5; box-shadow:0 10px 24px rgba(0,0,0,.45); }
+  .reorder-row .reorder-thumb{
+    width:42px; height:calc(42px / 1.586); border-radius:6px; overflow:hidden; flex:none;
+    background:linear-gradient(135deg, rgba(94,92,230,.38), rgba(94,92,230,.12));
+    display:flex; align-items:center; justify-content:center;
+  }
+  .reorder-row .reorder-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .reorder-row .reorder-name{ flex:1; font-size:14.5px; }
+  .reorder-row .drag-handle{
+    color:var(--muted); padding:8px; touch-action:none; cursor:grab;
+  }
 </style>
 </head>
 <body>
@@ -224,7 +256,14 @@
     <div class="topbar">
       <h1>JaxCards</h1>
       <div style="display:flex;align-items:center;gap:10px;">
-        <span class="version">V1.5.1</span>
+        <span class="version">V1.6.0</span>
+        <button class="icon-btn" id="reorder-btn" aria-label="調整卡片順序">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="6" x2="20" y2="6"/>
+            <line x1="4" y1="12" x2="20" y2="12"/>
+            <line x1="4" y1="18" x2="20" y2="18"/>
+          </svg>
+        </button>
         <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -234,7 +273,6 @@
         </button>
       </div>
     </div>
-    <div class="banner"><b>離線運作</b> · 所有資料加密存在本機 IndexedDB,這個 App 不會連線到任何伺服器。</div>
     <div id="empty-state" class="empty hidden">
       <div class="mark"></div>
       還沒有任何卡片<br/>點下面的按鈕開始新增
@@ -339,7 +377,25 @@
   <div class="crop-viewport" id="crop-viewport">
     <img id="crop-img" draggable="false" alt="" />
   </div>
+  <button class="icon-btn" id="crop-rotate-btn" style="margin-top:16px;" aria-label="旋轉">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21.5 2v6h-6"/>
+      <path d="M2.5 22v-6h6"/>
+      <path d="M2 11.5a10 10 0 0 1 17.4-6.7L21.5 8"/>
+      <path d="M22 12.5a10 10 0 0 1-17.4 6.7L2.5 16"/>
+    </svg>
+  </button>
   <div class="crop-hint">拖曳移動 · 兩指縮放</div>
+</div>
+
+<!-- Reorder screen -->
+<div id="reorder-backdrop" class="reorder-screen hidden">
+  <div class="reorder-topbar">
+    <button class="link" id="reorder-cancel-btn">取消</button>
+    <span class="reorder-title">調整卡片順序</span>
+    <button class="link" id="reorder-done-btn">完成</button>
+  </div>
+  <div class="reorder-list" id="reorder-list"></div>
 </div>
 
 <script src="app.js"></script>
