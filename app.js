@@ -230,7 +230,7 @@ async function openDetail(id) {
   $("detail-content").innerHTML = `
     <div class="detail-card" style="background:${brand.grad}">
       <div class="nickname">${escapeHtml(data.nickname || "未命名卡片")}</div>
-      <div class="bank">${escapeHtml(data.bank || "")} · ${brand.name}</div>
+      <div class="bank">${brand.name}</div>
       <div class="numberline mono">
         <span>${formatNumberFull(data.number || "")}</span>
         <button class="copy-btn" id="copy-btn">複製</button>
@@ -281,7 +281,6 @@ function openForm(existingCard, existingData) {
   pendingPhotoDataUrl = null;
   $("form-title").textContent = existingCard ? "編輯卡片" : "新增卡片";
   $("f-nickname").value = existingData?.nickname || "";
-  $("f-bank").value = existingData?.bank || "";
   $("f-number").value = existingData?.number ? formatNumberFull(existingData.number) : "";
   $("f-expiry").value = existingData?.expiry || "";
   $("f-holder").value = existingData?.holder || "";
@@ -294,7 +293,7 @@ function openForm(existingCard, existingData) {
       preview.innerHTML = `<img src="${url}" />`;
     });
   } else {
-    preview.innerHTML = "點擊拍攝卡面縮圖(選填)";
+    preview.innerHTML = "尚未選擇卡面縮圖(選填)";
   }
   $("form-backdrop").classList.remove("hidden");
 }
@@ -302,13 +301,22 @@ $("add-card-btn").onclick = () => openForm(null, null);
 $("form-cancel-btn").onclick = () => { $("form-backdrop").classList.add("hidden"); editingCardId = null; };
 $("form-backdrop").addEventListener("click", (e) => { if (e.target === $("form-backdrop")) { $("form-backdrop").classList.add("hidden"); } });
 
-$("photo-preview").onclick = () => $("photo-input").click();
-$("photo-input").addEventListener("change", async (e) => {
+$("photo-camera-btn").onclick = () => $("photo-input-camera").click();
+$("photo-library-btn").onclick = () => $("photo-input-library").click();
+async function handlePhotoFile(e) {
   const file = e.target.files[0];
   if (!file) return;
   const dataUrl = await compressImage(file, 420, 0.55);
   pendingPhotoDataUrl = dataUrl;
   $("photo-preview").innerHTML = `<img src="${dataUrl}" />`;
+}
+$("photo-input-camera").addEventListener("change", handlePhotoFile);
+$("photo-input-library").addEventListener("change", handlePhotoFile);
+
+$("f-expiry").addEventListener("input", (e) => {
+  let digits = e.target.value.replace(/\D/g, "").slice(0, 4);
+  if (digits.length >= 3) digits = digits.slice(0, 2) + "/" + digits.slice(2);
+  e.target.value = digits;
 });
 function compressImage(file, maxWidth, quality) {
   return new Promise((resolve) => {
@@ -332,7 +340,6 @@ $("form-save-btn").onclick = async () => {
   const digits = $("f-number").value.replace(/\D/g, "");
   const payload = {
     nickname: $("f-nickname").value.trim(),
-    bank: $("f-bank").value.trim(),
     number: digits,
     expiry: $("f-expiry").value.trim(),
     holder: $("f-holder").value.trim(),
@@ -360,6 +367,33 @@ $("form-save-btn").onclick = async () => {
   toast("已儲存");
   refreshCardList();
 };
+
+// ---------- Viewport height ----------
+// Same technique as jaxmoney: window.innerHeight / visualViewport.height
+// can get transiently stuck on a wrong value around cold-start/rotation
+// on iOS. screen.height/width + screen.orientation.type stay correct
+// through that window, so layout height is derived from those instead.
+function trustedViewportHeight() {
+  const s = window.screen;
+  const o = s && s.orientation;
+  if (s && o && typeof o.type === "string") {
+    const isPortrait = o.type.indexOf("portrait") === 0;
+    const h = isPortrait ? s.height : s.width;
+    if (h) return h;
+  }
+  return window.innerHeight;
+}
+function setAppHeight() {
+  document.documentElement.style.setProperty("--app-h", trustedViewportHeight() + "px");
+}
+window.addEventListener("load", setAppHeight);
+window.addEventListener("resize", setAppHeight);
+window.addEventListener("orientationchange", setAppHeight);
+window.addEventListener("pageshow", setAppHeight);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") setAppHeight();
+});
+setAppHeight();
 
 // ---------- boot ----------
 async function boot() {

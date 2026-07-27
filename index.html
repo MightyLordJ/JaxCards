@@ -23,6 +23,12 @@
     --danger:#E2574C;
     --radius-card: 16px;
     --radius-sheet: 22px;
+    /* Safari's bottom toolbar shows/hides unpredictably and isn't
+       reliably detectable (visualViewport can't see it either — see
+       jaxmoney's notes). Rather than chase it, just always leave this
+       much dead space at the very bottom so nothing tappable can ever
+       end up under it. */
+    --bottom-safe: calc(64px + env(safe-area-inset-bottom));
     font-size: 16px;
   }
   *{box-sizing:border-box;}
@@ -45,6 +51,7 @@
     margin:0 auto;
     height:100vh;
     height:100dvh;
+    height:var(--app-h, 100dvh);
     overflow:hidden;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     display:flex; flex-direction:column;
@@ -91,7 +98,7 @@
 
   /* ---------- Vault list ---------- */
   #vault-screen{
-    padding-bottom:calc(100px + env(safe-area-inset-bottom));
+    padding-bottom:calc(72px + var(--bottom-safe));
     overflow:hidden; /* only #card-list inside scrolls, not this wrapper */
     display:flex; flex-direction:column;
   }
@@ -130,7 +137,7 @@
   }
 
   .fab{
-    position:fixed; left:50%; bottom:calc(28px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+    position:fixed; left:50%; bottom:var(--bottom-safe); transform:translateX(-50%);
     width:calc(100% - 44px); max-width:436px;
   }
   @media (min-width: 640px){ .fab{ max-width:520px; } }
@@ -142,7 +149,7 @@
   .sheet{
     width:100%; max-width:480px; margin:0 auto; background:var(--surface);
     border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
-    padding:10px 22px calc(24px + env(safe-area-inset-bottom));
+    padding:10px 22px calc(24px + var(--bottom-safe));
     max-height:88vh; overflow-y:auto;
     border-top:1px solid var(--line);
   }
@@ -163,8 +170,10 @@
   .note-box{ background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:12px 14px; font-size:14px; margin-top:6px; white-space:pre-wrap; }
   .copy-hint{ font-size:11.5px; color:var(--muted); text-align:center; margin-top:6px; }
 
-  .photo-preview{ width:100%; height:150px; border-radius:12px; border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:13px; overflow:hidden; margin-bottom:14px; background:var(--surface); }
+  .photo-preview{ width:100%; height:150px; border-radius:12px; border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:13px; overflow:hidden; margin-bottom:10px; background:var(--surface); }
   .photo-preview img{ width:100%; height:100%; object-fit:cover; }
+  .photo-actions{ display:flex; gap:10px; margin-bottom:14px; }
+  .photo-actions .btn{ flex:1; padding:12px; font-size:14px; }
 
   .toast{
     position:fixed; left:50%; bottom:100px; transform:translateX(-50%);
@@ -219,13 +228,17 @@
   <div class="sheet">
     <div class="grabber"></div>
     <h2 id="form-title">新增卡片</h2>
-    <div class="photo-preview" id="photo-preview">點擊拍攝卡面縮圖(選填)</div>
-    <input type="file" accept="image/*" capture="environment" id="photo-input" class="hidden" />
+    <div class="photo-preview" id="photo-preview">尚未選擇卡面縮圖(選填)</div>
+    <div class="photo-actions">
+      <button type="button" class="btn" id="photo-camera-btn">📷 拍照</button>
+      <button type="button" class="btn" id="photo-library-btn">🖼️ 從相簿選擇</button>
+    </div>
+    <input type="file" accept="image/*" capture="environment" id="photo-input-camera" class="hidden" />
+    <input type="file" accept="image/*" id="photo-input-library" class="hidden" />
     <div class="field"><label>卡片暱稱</label><input id="f-nickname" placeholder="例如：國泰無限卡" /></div>
-    <div class="field"><label>發卡銀行</label><input id="f-bank" placeholder="例如：國泰世華" /></div>
     <div class="field"><label>卡號</label><input id="f-number" class="mono" inputmode="numeric" placeholder="1234 5678 9012 3456" /></div>
     <div class="row2">
-      <div class="field"><label>有效期限</label><input id="f-expiry" class="mono" placeholder="MM/YY" /></div>
+      <div class="field"><label>有效期限</label><input id="f-expiry" class="mono" inputmode="numeric" maxlength="5" placeholder="MM/YY" /></div>
       <div class="field"><label>持卡人姓名</label><input id="f-holder" placeholder="與卡面一致" /></div>
     </div>
     <div class="field"><label>備註(可放你自己的 CVV 密碼提示)</label><textarea id="f-note" placeholder="例如：自訂密碼規則,只有你看得懂"></textarea></div>
