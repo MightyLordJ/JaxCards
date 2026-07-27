@@ -228,7 +228,7 @@ async function openDetail(id) {
   const brand = detectBrand(data.number || "");
 
   $("detail-content").innerHTML = `
-    <div class="detail-card" style="background:${brand.grad}">
+    <div class="detail-card">
       <div class="nickname">${escapeHtml(data.nickname || "未命名卡片")}</div>
       <div class="bank">${brand.name}</div>
       <div class="numberline mono">
