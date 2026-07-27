@@ -172,7 +172,7 @@
   .detail-card .numberline{ font-size:17px; margin-top:26px; letter-spacing:.03em; display:flex; align-items:center; justify-content:space-between; gap:10px; white-space:nowrap; color:#fff; }
   .detail-card .copy-btn{ background:rgba(255,255,255,.18); border:none; color:#fff; padding:0; border-radius:9px; flex:none; width:32px; height:32px; display:flex; align-items:center; justify-content:center; }
   .detail-row{ display:flex; justify-content:space-between; font-size:13px; margin-top:18px; opacity:.85; }
-  .note-box{ background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:12px 14px; font-size:14px; margin-top:6px; white-space:pre-wrap; }
+  .note-box{ font-size:14px; margin-top:6px; white-space:pre-wrap; color:var(--text); opacity:.9; }
   .copy-hint{ font-size:11.5px; color:var(--muted); text-align:center; margin-top:6px; }
 
   .photo-preview{ width:100%; height:110px; border-radius:12px; border:1px dashed var(--line); display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:13px; overflow:hidden; margin-bottom:10px; background:var(--surface); }
@@ -200,7 +200,7 @@
     <div class="topbar">
       <h1>JaxCards</h1>
       <div style="display:flex;align-items:center;gap:10px;">
-        <span class="version">V1.2.0</span>
+        <span class="version">V1.3.0</span>
         <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -253,7 +253,11 @@
       <input id="f-expiry" class="mono" inputmode="numeric" maxlength="5" placeholder="MM/YY" />
       <div class="field-error" id="f-expiry-error"></div>
     </div>
-    <div class="field"><label>備註(可放你自己的 CVV 密碼提示)</label><textarea id="f-note" placeholder="例如：自訂密碼規則,只有你看得懂"></textarea></div>
+    <div class="field">
+      <label>CVV(選填,顯示時會加密混淆)</label>
+      <input id="f-cvv" class="mono" inputmode="numeric" maxlength="4" placeholder="3-4 碼" />
+    </div>
+    <div class="field"><label>備註</label><textarea id="f-note" placeholder="自由備註"></textarea></div>
     <div class="sheet-actions">
       <button class="btn" id="form-cancel-btn">取消</button>
       <button class="btn primary" id="form-save-btn">儲存</button>

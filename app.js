@@ -173,6 +173,12 @@ function detectBrand(numberDigits) {
 function formatNumberFull(digits) {
   return digits.replace(/(.{4})/g, "$1 ").trim();
 }
+// Shifts every digit by `offset` (mod 10, wraps both directions:
+// 0-1 -> 9, 9+1 -> 0) — used to display a decoy CVV that isn't the real
+// one, with the real offset hidden in the hint line below it.
+function shiftDigits(digits, offset) {
+  return digits.split("").map((d) => String(((parseInt(d, 10) + offset) % 10 + 10) % 10)).join("");
+}
 
 async function enterVault() {
   showScreen("vault-screen");
@@ -232,6 +238,23 @@ async function openDetail(id) {
   catch (e) { toast("解密失敗"); return; }
   const brand = detectBrand(data.number || "");
 
+  // CVV is never shown as-is: pick a fresh random offset every time this
+  // screen opens, shift every digit by it, and hide the offset itself in
+  // the hint line below — dot COUNT encodes magnitude (1 or 2), dot
+  // POSITION encodes sign (end = positive, start = negative). Only
+  // someone who knows this rule can mentally reverse the shift; a glance
+  // at the screen alone doesn't reveal the real CVV.
+  const baseHint = "複製的卡號會在 20 秒後自動從剪貼簿清除";
+  let cvvRowHtml = "";
+  let hintHtml = escapeHtml(baseHint);
+  if (data.cvv) {
+    const offset = [-2, -1, 1, 2][Math.floor(Math.random() * 4)];
+    const decoyCvv = shiftDigits(data.cvv, offset);
+    const dots = ".".repeat(Math.abs(offset));
+    hintHtml = offset > 0 ? `${escapeHtml(baseHint)}${dots}` : `${dots}${escapeHtml(baseHint)}`;
+    cvvRowHtml = `<div class="detail-row"><span>CVV</span><span class="mono">${escapeHtml(decoyCvv)}</span></div>`;
+  }
+
   $("detail-content").innerHTML = `
     <div class="detail-card">
       <div class="nickname">${escapeHtml(data.nickname || "未命名卡片")}</div>
@@ -246,10 +269,12 @@ async function openDetail(id) {
         </button>
       </div>
       <div class="detail-row"><span>有效期限</span><span class="mono">${escapeHtml(data.expiry || "—")}</span></div>
+      ${cvvRowHtml}
     </div>
     ${data.note ? `<div><div class="detail-row"><span>備註</span><span></span></div><div class="note-box">${escapeHtml(data.note)}</div></div>` : ""}
-    <div class="copy-hint">複製的卡號會在 20 秒後自動從剪貼簿清除</div>
+    <div class="copy-hint">${hintHtml}</div>
   `;
+
 
   $("copy-btn").onclick = async () => {
     try {
@@ -309,6 +334,7 @@ function openForm(existingCard, existingData) {
   $("f-nickname").value = existingData?.nickname || "";
   $("f-number").value = existingData?.number ? formatNumberFull(existingData.number) : "";
   $("f-expiry").value = existingData?.expiry || "";
+  $("f-cvv").value = existingData?.cvv || "";
   $("f-note").value = existingData?.note || "";
   $("f-number-error").textContent = "";
   $("f-number").classList.remove("invalid");
@@ -400,6 +426,9 @@ $("f-expiry").addEventListener("blur", (e) => {
   $("f-expiry-error").textContent = msg;
   $("f-expiry").classList.toggle("invalid", !!msg);
 });
+$("f-cvv").addEventListener("input", (e) => {
+  e.target.value = e.target.value.replace(/\D/g, "").slice(0, 4);
+});
 function compressImage(file, maxWidth, quality) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -437,6 +466,7 @@ $("form-save-btn").onclick = async () => {
     nickname: $("f-nickname").value.trim(),
     number: digits,
     expiry,
+    cvv: $("f-cvv").value.trim(),
     note: $("f-note").value.trim(),
   };
 
