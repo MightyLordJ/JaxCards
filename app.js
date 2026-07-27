@@ -194,11 +194,11 @@ async function refreshCardList() {
         const photoUrl = await decryptString(card.photoIv, card.photoCipher, sessionKey);
         el.innerHTML = `<img src="${photoUrl}" alt="" />`;
       } catch (e) {
-        el.style.background = brand.grad;
+        el.classList.add("no-photo");
         el.innerHTML = `<div class="placeholder"><span class="brand-mark">${brand.name}</span></div>`;
       }
     } else {
-      el.style.background = brand.grad;
+      el.classList.add("no-photo");
       el.innerHTML = `<div class="placeholder"><span class="brand-mark">${brand.name}</span></div>`;
     }
     const caption = document.createElement("div");
@@ -217,6 +217,7 @@ function escapeHtml(s) {
 // ---------- Detail sheet ----------
 let currentDetailId = null;
 let clipboardClearTimer = null;
+let deleteConfirmTimer = null;
 
 async function openDetail(id) {
   const card = await idbGet("cards", id);
@@ -261,7 +262,22 @@ async function openDetail(id) {
   };
 
   $("detail-edit-btn").onclick = () => { closeDetail(); openForm(card, data); };
-  $("detail-delete-btn").onclick = async () => {
+  const deleteBtn = $("detail-delete-btn");
+  deleteBtn.textContent = "刪除";
+  deleteBtn.classList.remove("confirming");
+  clearTimeout(deleteConfirmTimer);
+  deleteBtn.onclick = async () => {
+    if (!deleteBtn.classList.contains("confirming")) {
+      deleteBtn.classList.add("confirming");
+      deleteBtn.textContent = "再按一次確認刪除";
+      clearTimeout(deleteConfirmTimer);
+      deleteConfirmTimer = setTimeout(() => {
+        deleteBtn.classList.remove("confirming");
+        deleteBtn.textContent = "刪除";
+      }, 3000);
+      return;
+    }
+    clearTimeout(deleteConfirmTimer);
     await idbDelete("cards", id);
     closeDetail();
     toast("已刪除");
@@ -272,6 +288,9 @@ async function openDetail(id) {
 function closeDetail() {
   $("detail-backdrop").classList.add("hidden");
   currentDetailId = null;
+  clearTimeout(deleteConfirmTimer);
+  $("detail-delete-btn").classList.remove("confirming");
+  $("detail-delete-btn").textContent = "刪除";
 }
 $("detail-backdrop").addEventListener("click", (e) => { if (e.target === $("detail-backdrop")) closeDetail(); });
 
