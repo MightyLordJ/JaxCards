@@ -38,7 +38,7 @@
     -webkit-tap-highlight-color:transparent;
     user-select:none;
   }
-  button, .btn, .keypad button, .card-thumb, .icon-btn, .link{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+  button, .btn, .card-thumb, .icon-btn, .link{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
   input, textarea{ user-select:text; font-size:16px; } /* 16px stops iOS auto-zooming the page on focus */
   #app{
     max-width:480px;
@@ -64,58 +64,6 @@
      it scrolls internally — never the whole page). */
   .screen{ flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; padding:28px 22px; position:relative; }
   .hidden{ display:none !important; }
-
-  .brandline{
-    display:flex; align-items:center; gap:10px; margin-bottom:6px;
-  }
-  .brandline .mark{
-    width:28px;height:20px;border-radius:5px;
-    background:linear-gradient(135deg, var(--accent), #8f7440);
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,.15);
-  }
-  .brandline span{ font-size:13px; letter-spacing:.14em; color:var(--muted); text-transform:uppercase; }
-
-  h1.title{ font-size:26px; margin:2px 0 4px; font-weight:700; letter-spacing:-.01em; }
-  p.subtitle{ color:var(--muted); font-size:14.5px; line-height:1.55; margin:0 0 26px; }
-
-  /* ---------- Card stack signature element ---------- */
-  .stack{ position:relative; height:150px; margin: 6px 0 30px; }
-  .stack .mini{
-    position:absolute; left:50%; top:0; width:220px; height:132px;
-    border-radius:14px; transform-origin: 50% 220%;
-    box-shadow: 0 10px 24px rgba(0,0,0,.45);
-    border:1px solid rgba(255,255,255,.08);
-  }
-  .stack .mini:nth-child(1){ transform:translateX(-50%) rotate(-9deg) translateY(6px); opacity:.55; background:linear-gradient(135deg,#232838,#171b24); }
-  .stack .mini:nth-child(2){ transform:translateX(-50%) rotate(4deg) translateY(2px); opacity:.8; background:linear-gradient(135deg,#2b2f3d,#1a1e29); }
-  .stack .mini:nth-child(3){ transform:translateX(-50%) rotate(-2deg); background:linear-gradient(135deg,#3a3120,#20242f); box-shadow:0 14px 30px rgba(0,0,0,.55), inset 0 0 0 1px rgba(212,175,106,.35); }
-  .stack .mini:nth-child(3)::after{
-    content:""; position:absolute; left:16px; top:20px; width:40px; height:10px; border-radius:3px;
-    background:linear-gradient(90deg, var(--accent), #f1dca6);
-  }
-
-  /* ---------- PIN dots ---------- */
-  .pin-dots{ display:flex; gap:16px; justify-content:center; margin: 18px 0 10px; }
-  .pin-dots .dot{
-    width:14px;height:14px;border-radius:50%;
-    border:1.5px solid var(--line); background:transparent; transition:.15s;
-  }
-  .pin-dots .dot.filled{ background:var(--accent); border-color:var(--accent); }
-  .pin-dots.shake{ animation: shake .35s; }
-  @keyframes shake{
-    0%,100%{ transform:translateX(0);} 20%{transform:translateX(-8px);} 40%{transform:translateX(8px);} 60%{transform:translateX(-6px);} 80%{transform:translateX(6px);}
-  }
-  .pin-error{ text-align:center; color:var(--danger); font-size:13px; height:18px; margin-bottom:4px; }
-
-  .keypad{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; max-width:340px; width:100%; margin: 10px auto 0; }
-  .keypad button{
-    aspect-ratio:1; border-radius:50%; border:1px solid var(--line);
-    background:var(--surface); color:var(--text); font-size:28px; font-weight:600;
-    display:flex; align-items:center; justify-content:center; min-height:64px;
-  }
-  .keypad button:active{ background:var(--surface-2); transform:scale(.96); }
-  .keypad button.ghost{ background:transparent; border:none; color:var(--muted); font-size:15px; }
-  .faceid-catcher{ position:absolute; inset:0; z-index:5; background:transparent; }
 
   /* ---------- Buttons ---------- */
   .btn{
@@ -235,53 +183,10 @@
 <body>
 <div id="app">
 
-  <!-- SETUP: choose PIN -->
-  <section id="setup-screen" class="screen hidden">
-    <div class="brandline"><div class="mark"></div><span>Card Vault</span></div>
-    <h1 class="title">建立你的保險箱</h1>
-    <p class="subtitle">所有卡片資料只會加密存在這支手機裡,不會傳到任何伺服器。先設定一組 PIN 碼,之後也能用 Face ID 快速解鎖。</p>
-    <div class="stack"><div class="mini"></div><div class="mini"></div><div class="mini"></div></div>
-    <div class="pin-dots" id="setup-dots"></div>
-    <div class="pin-error" id="setup-error"></div>
-    <div class="keypad" id="setup-keypad"></div>
-  </section>
-
-  <!-- SETUP: confirm PIN -->
-  <section id="confirm-screen" class="screen hidden">
-    <h1 class="title">再輸入一次確認</h1>
-    <p class="subtitle">確認 PIN 碼一致,這組密碼將用來加密你的資料,遺失後將無法還原。</p>
-    <div class="pin-dots" id="confirm-dots"></div>
-    <div class="pin-error" id="confirm-error"></div>
-    <div class="keypad" id="confirm-keypad"></div>
-  </section>
-
-  <!-- SETUP: offer FaceID -->
-  <section id="faceid-offer-screen" class="screen hidden">
-    <div class="brandline"><div class="mark"></div><span>Card Vault</span></div>
-    <h1 class="title">啟用 Face ID 解鎖?</h1>
-    <p class="subtitle">開啟後,下次可以直接用 Face ID 打開保險箱,不用每次輸入 PIN。PIN 碼仍會保留,隨時可以當備用解鎖方式。</p>
-    <div style="flex:1"></div>
-    <button class="btn primary block" id="enable-faceid-btn">啟用 Face ID</button>
-    <button class="link" id="skip-faceid-btn">先不要,只用 PIN</button>
-  </section>
-
-  <!-- LOCK screen (returning user) -->
-  <section id="lock-screen" class="screen hidden">
-    <div class="brandline"><div class="mark"></div><span>Card Vault</span></div>
-    <h1 class="title" id="lock-title">已鎖定</h1>
-    <p class="subtitle" id="lock-subtitle">輸入 PIN 碼解鎖你的卡片</p>
-    <div class="stack"><div class="mini"></div><div class="mini"></div><div class="mini"></div></div>
-    <div class="pin-dots" id="lock-dots"></div>
-    <div class="pin-error" id="lock-error"></div>
-    <div class="keypad" id="lock-keypad"></div>
-    <button class="btn block" id="use-faceid-btn" style="margin-top:18px;">改用 Face ID</button>
-  </section>
-
   <!-- VAULT (main) -->
   <section id="vault-screen" class="screen hidden">
     <div class="topbar">
       <h1>卡片保險箱</h1>
-      <button class="icon-btn" id="lock-now-btn" title="鎖定">🔒</button>
     </div>
     <div class="banner"><b>離線運作</b> · 所有資料加密存在本機 IndexedDB,這個 App 不會連線到任何伺服器。</div>
     <div id="empty-state" class="empty hidden">

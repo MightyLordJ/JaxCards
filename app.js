@@ -1,13 +1,14 @@
 /* ===================================================================
    Card Vault — 100% local. No network calls anywhere in this file.
+
+   TEMPORARY: PIN entry and Face ID are stripped out for now while the
+   vault UI is being polished — see ensureAutoKey() below. The card
+   encryption itself is untouched (AES-256-GCM, per-card random IV);
+   only the "how do we get the key" step is currently a stub.
+
    Data model:
-     meta store (key "config"): { salt, pinWrappedKey, pinWrappedIv,
-       prfWrappedKey, prfWrappedIv, prfSalt, credentialId, authMode }
+     meta store (key "config"): { autoKey }
      cards store: { id, iv, cipher, photoIv, photoCipher, createdAt }
-   The master AES-256 key encrypts every card record's JSON payload.
-   It is itself wrapped by a PIN-derived key and, optionally, by a key
-   derived from a WebAuthn PRF assertion (Face ID / Touch ID) — either
-   one alone can unlock the vault.
 =================================================================== */
 
 // ---------- tiny helpers ----------
@@ -97,39 +98,8 @@ async function idbAll(store) {
 }
 
 // ---------- Crypto primitives ----------
-async function deriveKeyFromPin(pin, saltBuf) {
-  const base = await crypto.subtle.importKey("raw", enc.encode(pin), "PBKDF2", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: saltBuf, iterations: 250000, hash: "SHA-256" },
-    base,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
-}
-async function deriveKeyFromBytes(rawBytes) {
-  // Used for PRF output -> HKDF -> AES-GCM key
-  const base = await crypto.subtle.importKey("raw", rawBytes, "HKDF", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey(
-    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(16), info: enc.encode("cardvault-prf") },
-    base,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
-}
 async function generateMasterKeyRaw() {
-  return randomBytes(32); // 256-bit master key, held only in memory once unlocked
-}
-async function wrapMasterKey(masterKeyRaw, wrappingKey) {
-  const iv = randomBytes(12);
-  const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, wrappingKey, masterKeyRaw);
-  return { iv: bufToB64(iv), cipher: bufToB64(cipher) };
-}
-async function unwrapMasterKey(ivB64, cipherB64, wrappingKey) {
-  const iv = new Uint8Array(b64ToBuf(ivB64));
-  const cipher = b64ToBuf(cipherB64);
-  return crypto.subtle.decrypt({ name: "AES-GCM", iv }, wrappingKey, cipher); // returns ArrayBuffer
+  return randomBytes(32); // 256-bit master key, held only in memory once loaded
 }
 async function importMasterKey(rawBuf) {
   return crypto.subtle.importKey("raw", rawBuf, "AES-GCM", false, ["encrypt", "decrypt"]);
@@ -159,331 +129,28 @@ async function decryptString(ivB64, cipherB64, key) {
 }
 
 // ---------- App state ----------
-let sessionKey = null; // CryptoKey, only while unlocked, never persisted
-let lockTimer = null;
-const AUTO_LOCK_MS = 3 * 60 * 1000;
-
-function scheduleAutoLock() {
-  clearTimeout(lockTimer);
-  lockTimer = setTimeout(lockVault, AUTO_LOCK_MS);
-}
-document.addEventListener("visibilitychange", async () => {
-  if (document.hidden) {
-    // Just drop the in-memory key. Do NOT touch WebAuthn here — a
-    // biometric prompt can't run against a backgrounded page anyway, and
-    // trying to fire one mid-transition is a likely reason it felt like
-    // Face ID needed an extra manual tap.
-    sessionKey = null;
-    return;
-  }
-  if (sessionKey) return; // still unlocked, nothing to do
-  const meta = await idbGet("meta", "config");
-  if (!meta) return; // mid-setup flow, leave it alone
-  if (!$("vault-screen").classList.contains("hidden")) showLockScreen();
-  offerFaceID(meta);
-});
+// TEMPORARY: PIN entry and Face ID are disabled while the vault UI is
+// being iterated on. Cards are still encrypted at rest (AES-256-GCM) —
+// the difference is the key is auto-provisioned on first run instead of
+// being derived from a PIN/biometric, so there's currently no real access
+// control in front of it. Re-introduce the PIN/Face ID flow before this
+// goes anywhere someone other than you can get physical access to.
+let sessionKey = null; // CryptoKey, held only in memory for this page session
 
 function showScreen(id) {
   document.querySelectorAll(".screen").forEach((s) => s.classList.add("hidden"));
   $(id).classList.remove("hidden");
 }
 
-// ---------- PIN keypad component ----------
-function buildKeypad(container, { onDigit, onDelete, showCancel, onCancel }) {
-  container.innerHTML = "";
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"];
-  keys.forEach((k) => {
-    const btn = document.createElement("button");
-    if (k === "") {
-      btn.className = "ghost";
-      btn.disabled = true;
-    } else if (k === "⌫") {
-      btn.textContent = "⌫";
-      btn.onclick = onDelete;
-    } else {
-      btn.textContent = k;
-      btn.onclick = () => onDigit(k);
-    }
-    container.appendChild(btn);
-  });
-}
-function renderDots(container, len, max = 6) {
-  container.innerHTML = "";
-  for (let i = 0; i < max; i++) {
-    const d = document.createElement("div");
-    d.className = "dot" + (i < len ? " filled" : "");
-    container.appendChild(d);
-  }
-}
-
-// ---------- Setup flow ----------
-let pinBuffer = "";
-let firstPin = "";
-
-function startSetupFlow() {
-  pinBuffer = "";
-  renderDots($("setup-dots"), 0);
-  $("setup-error").textContent = "";
-  buildKeypad($("setup-keypad"), {
-    onDigit: (d) => {
-      if (pinBuffer.length >= 6) return;
-      pinBuffer += d;
-      renderDots($("setup-dots"), pinBuffer.length);
-      if (pinBuffer.length >= 4 && pinBuffer.length === 6) finishFirstPin();
-    },
-    onDelete: () => {
-      pinBuffer = pinBuffer.slice(0, -1);
-      renderDots($("setup-dots"), pinBuffer.length);
-    },
-  });
-  showScreen("setup-screen");
-  // allow 4-digit PIN via a small "done" affordance: commit after short pause too
-  $("setup-keypad").addEventListener("click", () => {
-    if (pinBuffer.length >= 4) {
-      clearTimeout(window.__setupCommitTimer);
-      window.__setupCommitTimer = setTimeout(() => {
-        if (pinBuffer.length >= 4 && $("setup-screen").classList.contains("hidden") === false) {
-          finishFirstPin();
-        }
-      }, 550);
-    }
-  });
-}
-function finishFirstPin() {
-  if (pinBuffer.length < 4) return;
-  firstPin = pinBuffer;
-  pinBuffer = "";
-  startConfirmFlow();
-}
-function startConfirmFlow() {
-  renderDots($("confirm-dots"), 0);
-  $("confirm-error").textContent = "";
-  buildKeypad($("confirm-keypad"), {
-    onDigit: (d) => {
-      if (pinBuffer.length >= firstPin.length) return;
-      pinBuffer += d;
-      renderDots($("confirm-dots"), pinBuffer.length);
-      if (pinBuffer.length === firstPin.length) checkConfirm();
-    },
-    onDelete: () => {
-      pinBuffer = pinBuffer.slice(0, -1);
-      renderDots($("confirm-dots"), pinBuffer.length);
-    },
-  });
-  showScreen("confirm-screen");
-}
-async function checkConfirm() {
-  if (pinBuffer !== firstPin) {
-    $("confirm-error").textContent = "兩次輸入不一致,請重新設定";
-    $("confirm-dots").classList.add("shake");
-    setTimeout(() => $("confirm-dots").classList.remove("shake"), 350);
-    pinBuffer = "";
-    setTimeout(() => { firstPin = ""; startSetupFlow(); }, 700);
-    return;
-  }
-  await completeSetup(firstPin);
-}
-
-async function completeSetup(pin) {
-  const salt = randomBytes(16);
-  const pinKey = await deriveKeyFromPin(pin, salt);
-  const masterKeyRaw = await generateMasterKeyRaw();
-  const wrapped = await wrapMasterKey(masterKeyRaw, pinKey);
-
-  await idbPut("meta", {
-    id: "config",
-    salt: bufToB64(salt),
-    pinWrappedKey: wrapped.cipher,
-    pinWrappedIv: wrapped.iv,
-    prfWrappedKey: null,
-    prfWrappedIv: null,
-    prfSalt: null,
-    credentialId: null,
-    authMode: "pin-only",
-  });
-
-  sessionKey = await importMasterKey(masterKeyRaw);
-  window.__pendingMasterKeyRaw = masterKeyRaw; // kept only until FaceID offer completes, then discarded
-
-  if (window.PublicKeyCredential) {
-    showScreen("faceid-offer-screen");
-  } else {
-    window.__pendingMasterKeyRaw = null;
-    enterVault();
-  }
-}
-
-// ---------- WebAuthn (Face ID / Touch ID) ----------
-function randId() {
-  return randomBytes(16);
-}
-async function registerFaceID() {
-  const prfSalt = randomBytes(32);
-  try {
-    const cred = await navigator.credentials.create({
-      publicKey: {
-        challenge: randomBytes(32),
-        rp: { name: "Card Vault" },
-        user: { id: randId(), name: "cardvault-user", displayName: "Card Vault" },
-        pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
-        authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
-        timeout: 60000,
-        extensions: { prf: { eval: { first: prfSalt } } },
-      },
-    });
-
-    const ext = cred.getClientExtensionResults();
-    const prfSupported = !!(ext && ext.prf && ext.prf.enabled);
-
-    const meta = await idbGet("meta", "config");
-    meta.credentialId = bufToB64(cred.rawId);
-
-    if (prfSupported && ext.prf.results && ext.prf.results.first) {
-      // Full passwordless path: PRF output derives a real wrapping key.
-      const prfKey = await deriveKeyFromBytes(ext.prf.results.first);
-      const wrapped = await wrapMasterKey(window.__pendingMasterKeyRaw, prfKey);
-      meta.prfWrappedKey = wrapped.cipher;
-      meta.prfWrappedIv = wrapped.iv;
-      meta.prfSalt = bufToB64(prfSalt);
-      meta.authMode = "prf";
-    } else {
-      // Fallback: biometric acts as a gate, PIN still does the real key derivation.
-      meta.authMode = "gate";
-    }
+async function ensureAutoKey() {
+  let meta = await idbGet("meta", "config");
+  if (!meta || !meta.autoKey) {
+    const masterKeyRaw = await generateMasterKeyRaw();
+    meta = { id: "config", autoKey: bufToB64(masterKeyRaw) };
     await idbPut("meta", meta);
-    window.__pendingMasterKeyRaw = null;
-    toast("Face ID 已啟用");
-  } catch (e) {
-    toast("Face ID 設定取消或失敗,仍可用 PIN 解鎖");
-    window.__pendingMasterKeyRaw = null;
   }
-  enterVault();
+  sessionKey = await importMasterKey(b64ToBuf(meta.autoKey));
 }
-
-async function tryFaceIDUnlock() {
-  const meta = await idbGet("meta", "config");
-  if (!meta || !meta.credentialId) return false;
-  try {
-    const allowCredentials = [{ id: b64ToBuf(meta.credentialId), type: "public-key" }];
-    if (meta.authMode === "prf") {
-      const prfSalt = new Uint8Array(b64ToBuf(meta.prfSalt));
-      const assertion = await navigator.credentials.get({
-        publicKey: {
-          challenge: randomBytes(32),
-          allowCredentials,
-          userVerification: "required",
-          timeout: 60000,
-          extensions: { prf: { eval: { first: prfSalt } } },
-        },
-      });
-      const ext = assertion.getClientExtensionResults();
-      if (!ext.prf || !ext.prf.results || !ext.prf.results.first) throw new Error("prf-missing");
-      const prfKey = await deriveKeyFromBytes(ext.prf.results.first);
-      const rawMaster = await unwrapMasterKey(meta.prfWrappedIv, meta.prfWrappedKey, prfKey);
-      sessionKey = await importMasterKey(rawMaster);
-      return true;
-    } else {
-      // gate mode: biometric success required, then still ask for PIN
-      await navigator.credentials.get({
-        publicKey: { challenge: randomBytes(32), allowCredentials, userVerification: "required", timeout: 60000 },
-      });
-      return "gate-passed";
-    }
-  } catch (e) {
-    return false;
-  }
-}
-
-// ---------- Lock / unlock ----------
-async function lockVault() {
-  sessionKey = null;
-  pinBuffer = "";
-  showLockScreen();
-  const meta = await idbGet("meta", "config");
-  if (meta) offerFaceID(meta);
-}
-async function showLockScreen() {
-  const meta = await idbGet("meta", "config");
-  if (!meta) { startSetupFlow(); return; }
-  pinBuffer = "";
-  renderDots($("lock-dots"), 0);
-  $("lock-error").textContent = "";
-  $("lock-subtitle").textContent = "輸入 PIN 碼解鎖你的卡片";
-  buildKeypad($("lock-keypad"), {
-    onDigit: async (d) => {
-      pinBuffer += d;
-      renderDots($("lock-dots"), pinBuffer.length);
-      if (pinBuffer.length >= 4) {
-        clearTimeout(window.__lockCommitTimer);
-        window.__lockCommitTimer = setTimeout(() => attemptPinUnlock(meta), 400);
-      }
-    },
-    onDelete: () => {
-      pinBuffer = pinBuffer.slice(0, -1);
-      renderDots($("lock-dots"), pinBuffer.length);
-    },
-  });
-  $("use-faceid-btn").classList.toggle("hidden", !meta.credentialId);
-  showScreen("lock-screen");
-}
-
-// Runs the biometric prompt without waiting for a tap. Safe to call
-// speculatively — it no-ops if there's no enrolled credential, and bails
-// out cleanly if the vault got unlocked some other way while it was
-// awaiting the prompt.
-async function attemptAutoFaceID(meta) {
-  if (!meta || !meta.credentialId || sessionKey) return;
-  $("lock-subtitle").textContent = "正在使用 Face ID 解鎖…";
-  const result = await tryFaceIDUnlock();
-  if (sessionKey) return; // unlocked via PIN while this was pending
-  if (result === true) { enterVault(); return; }
-  if (result === "gate-passed") { $("lock-subtitle").textContent = "生物辨識通過,請輸入 PIN 完成解鎖"; return; }
-  $("lock-subtitle").textContent = "輸入 PIN 碼解鎖你的卡片";
-}
-
-// iOS/Android both require a real tap before they'll show the biometric
-// prompt — a page-load or visibility event alone isn't enough, no matter
-// how the JS calls it. This overlay makes literally the first touch
-// anywhere on the lock screen count as that tap, so there's no separate
-// button to find. It removes itself after firing once so the keypad
-// underneath works normally afterwards.
-function armFaceIDCatcher(meta) {
-  const screen = $("lock-screen");
-  const existing = screen.querySelector(".faceid-catcher");
-  if (existing) existing.remove();
-  if (!meta || !meta.credentialId) return;
-  const catcher = document.createElement("div");
-  catcher.className = "faceid-catcher";
-  catcher.addEventListener("pointerdown", () => {
-    catcher.remove();
-    attemptAutoFaceID(meta);
-  }, { once: true });
-  screen.appendChild(catcher);
-}
-async function offerFaceID(meta) {
-  armFaceIDCatcher(meta);
-  await attemptAutoFaceID(meta); // fires immediately too, in case the platform allows it without an extra tap
-}
-async function attemptPinUnlock(meta) {
-  try {
-    const salt = new Uint8Array(b64ToBuf(meta.salt));
-    const pinKey = await deriveKeyFromPin(pinBuffer, salt);
-    const rawMaster = await unwrapMasterKey(meta.pinWrappedIv, meta.pinWrappedKey, pinKey);
-    sessionKey = await importMasterKey(rawMaster);
-    enterVault();
-  } catch (e) {
-    $("lock-error").textContent = "PIN 碼錯誤";
-    $("lock-dots").classList.add("shake");
-    setTimeout(() => $("lock-dots").classList.remove("shake"), 350);
-    pinBuffer = "";
-    renderDots($("lock-dots"), 0);
-  }
-}
-
-$("use-faceid-btn").addEventListener("click", async () => {
-  const meta = await idbGet("meta", "config");
-  await attemptAutoFaceID(meta);
-});
 
 // ---------- Vault (main list) ----------
 function detectBrand(numberDigits) {
@@ -500,7 +167,6 @@ function formatNumberFull(digits) {
 
 async function enterVault() {
   showScreen("vault-screen");
-  scheduleAutoLock();
   await refreshCardList();
 }
 
@@ -695,16 +361,6 @@ $("form-save-btn").onclick = async () => {
   refreshCardList();
 };
 
-// ---------- wire static screen buttons ----------
-$("enable-faceid-btn").onclick = registerFaceID;
-$("skip-faceid-btn").onclick = () => { window.__pendingMasterKeyRaw = null; enterVault(); };
-$("lock-now-btn").onclick = lockVault;
-
-// re-arm auto-lock on interaction
-["click", "touchstart", "keydown"].forEach((ev) => document.addEventListener(ev, () => {
-  if (sessionKey) scheduleAutoLock();
-}));
-
 // ---------- boot ----------
 async function boot() {
   if ("serviceWorker" in navigator) {
@@ -719,12 +375,7 @@ async function boot() {
       window.location.reload();
     });
   }
-  const meta = await idbGet("meta", "config");
-  if (!meta) {
-    startSetupFlow();
-    return;
-  }
-  await showLockScreen();
-  if (document.visibilityState === "visible") offerFaceID(meta);
+  await ensureAutoKey();
+  await enterVault();
 }
 boot();
