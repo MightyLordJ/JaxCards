@@ -180,10 +180,8 @@ async function enterVault() {
 async function refreshCardList() {
   const cards = await idbAll("cards");
   const stack = $("card-stack");
-  const rest = $("card-grid-rest");
   const empty = $("empty-state");
   stack.innerHTML = "";
-  rest.innerHTML = "";
   if (cards.length === 0) {
     empty.classList.remove("hidden");
     return;
@@ -195,7 +193,6 @@ async function refreshCardList() {
     if (b.order != null) return 1;
     return (b.createdAt || 0) - (a.createdAt || 0);
   });
-  let index = 0;
   for (const card of cards) {
     let data;
     try { data = await decryptJSON(card.iv, card.cipher, sessionKey); }
@@ -217,10 +214,7 @@ async function refreshCardList() {
     }
 
     el.onclick = () => openDetail(card.id);
-    // First 3 (most-used) cards go in the big overlapping stack; the rest
-    // go in a plain 2-column grid.
-    (index < 3 ? stack : rest).appendChild(el);
-    index++;
+    stack.appendChild(el);
   }
 }
 function escapeHtml(s) {
@@ -625,7 +619,7 @@ $("crop-viewport").addEventListener("wheel", (e) => {
 
 $("crop-cancel-btn").onclick = () => { $("crop-backdrop").classList.add("hidden"); cropSourceCanvas = null; };
 $("crop-done-btn").onclick = () => {
-  const outW = 640, outH = Math.round(outW / 1.586);
+  const outW = 900, outH = Math.round(outW / 1.586);
   const sx = -cropTX / cropScale;
   const sy = -cropTY / cropScale;
   const sW = cropVW / cropScale;
