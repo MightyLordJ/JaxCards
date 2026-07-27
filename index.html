@@ -100,7 +100,7 @@
 
   /* ---------- Vault list ---------- */
   #vault-screen{
-    padding-bottom:calc(78px + env(safe-area-inset-bottom));
+    padding-bottom:calc(68px + env(safe-area-inset-bottom));
     overflow:hidden; /* only #card-list inside scrolls, not this wrapper */
     display:flex; flex-direction:column;
   }
@@ -138,7 +138,15 @@
   }
 
   .fab{
-    position:fixed; left:50%; bottom:calc(14px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+    /* position:absolute (anchored to #vault-screen, which is already
+       position:relative) instead of position:fixed (anchored to the true
+       viewport) — this is the actual fix for the "ghost blank space" gap:
+       when iOS's 100dvh misreports a shorter height, #app/#vault-screen
+       render shrunk, but a position:fixed button stays pinned to the real
+       screen edge, opening a gap between the two. Anchoring the button to
+       the same box as the content means they can never diverge, whatever
+       height #app actually ends up with. */
+    position:absolute; left:50%; bottom:calc(14px + env(safe-area-inset-bottom)); transform:translateX(-50%);
     width:calc(100% - 44px); max-width:436px;
   }
   @media (min-width: 640px){ .fab{ max-width:520px; } }
@@ -256,7 +264,7 @@
     <div class="topbar">
       <h1>JaxCards</h1>
       <div style="display:flex;align-items:center;gap:10px;">
-        <span class="version">V1.7.0</span>
+        <span class="version">V1.7.1</span>
         <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
