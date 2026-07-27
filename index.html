@@ -190,6 +190,31 @@
     font-size:12.5px; color:var(--muted); line-height:1.5; margin-bottom:18px;
   }
   .banner b{ color:var(--text); }
+
+  /* ---------- Photo crop screen ---------- */
+  .crop-screen{
+    position:fixed; inset:0; background:#000; z-index:60;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .crop-topbar{
+    position:absolute; top:0; left:0; right:0; z-index:2;
+    display:flex; align-items:center; justify-content:space-between;
+    padding: calc(14px + env(safe-area-inset-top)) 18px 14px;
+  }
+  .crop-topbar .crop-title{ color:#fff; font-size:14px; font-weight:600; }
+  .crop-topbar .link{ color:var(--accent); font-size:15px; padding:6px 4px; }
+  .crop-viewport{
+    position:relative; overflow:hidden; border-radius:14px; touch-action:none;
+    background:#111; border:1px solid rgba(255,255,255,.15);
+  }
+  .crop-viewport img{
+    position:absolute; top:0; left:0; transform-origin:0 0;
+    will-change:transform; user-select:none; -webkit-user-drag:none; pointer-events:none;
+  }
+  .crop-hint{
+    position:absolute; bottom:calc(24px + env(safe-area-inset-bottom));
+    left:0; right:0; text-align:center; color:var(--muted); font-size:12px;
+  }
 </style>
 </head>
 <body>
@@ -200,7 +225,7 @@
     <div class="topbar">
       <h1>JaxCards</h1>
       <div style="display:flex;align-items:center;gap:10px;">
-        <span class="version">V1.3.1</span>
+        <span class="version">V1.4.0</span>
         <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -303,6 +328,19 @@
     </div>
 
   </div>
+</div>
+
+<!-- Photo crop screen -->
+<div id="crop-backdrop" class="crop-screen hidden">
+  <div class="crop-topbar">
+    <button class="link" id="crop-cancel-btn">取消</button>
+    <span class="crop-title">調整卡面範圍</span>
+    <button class="link" id="crop-done-btn">完成</button>
+  </div>
+  <div class="crop-viewport" id="crop-viewport">
+    <img id="crop-img" draggable="false" alt="" />
+  </div>
+  <div class="crop-hint">拖曳移動 · 兩指縮放</div>
 </div>
 
 <script src="app.js"></script>
