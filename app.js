@@ -287,6 +287,10 @@ function openForm(existingCard, existingData) {
   $("f-number").value = existingData?.number ? formatNumberFull(existingData.number) : "";
   $("f-expiry").value = existingData?.expiry || "";
   $("f-note").value = existingData?.note || "";
+  $("f-number-error").textContent = "";
+  $("f-number").classList.remove("invalid");
+  $("f-expiry-error").textContent = "";
+  $("f-expiry").classList.remove("invalid");
 
   const preview = $("photo-preview");
   if (existingCard && existingCard.photoCipher) {
@@ -313,11 +317,41 @@ async function handlePhotoFile(e) {
 }
 $("photo-input").addEventListener("change", handlePhotoFile);
 
+function cardNumberError(digits) {
+  if (digits.length === 0) return "";
+  if (digits.length < 16) return `還差 ${16 - digits.length} 碼,卡號需要完整 16 碼`;
+  return "";
+}
 $("f-number").addEventListener("input", (e) => {
-  const digits = e.target.value.replace(/\D/g, "").slice(0, 19);
+  const digits = e.target.value.replace(/\D/g, "").slice(0, 16);
   e.target.value = digits.replace(/(.{4})/g, "$1 ").trim();
+  $("f-number").classList.remove("invalid");
+  $("f-number-error").textContent = "";
+});
+$("f-number").addEventListener("blur", (e) => {
+  const digits = e.target.value.replace(/\D/g, "");
+  const msg = cardNumberError(digits);
+  $("f-number-error").textContent = msg;
+  $("f-number").classList.toggle("invalid", !!msg);
 });
 
+// Full expiry plausibility, not just "is this a real month": a card
+// that already expired years ago or one dated decades out isn't a typo
+// worth silently accepting.
+function expiryError(value) {
+  if (!value) return "";
+  const m = value.match(/^(\d{2})\/(\d{2})$/);
+  if (!m) return "請輸入完整的 MM/YY";
+  const mm = parseInt(m[1], 10);
+  if (mm < 1 || mm > 12) return "月份不正確";
+  const fullYear = 2000 + parseInt(m[2], 10);
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  if (fullYear < currentYear || (fullYear === currentYear && mm < currentMonth)) return "這組日期已經過期";
+  if (fullYear > currentYear + 15) return "年份看起來不太合理";
+  return "";
+}
 $("f-expiry").addEventListener("input", (e) => {
   let digits = e.target.value.replace(/\D/g, "").slice(0, 4);
   if (digits.length >= 1) {
@@ -333,6 +367,15 @@ $("f-expiry").addEventListener("input", (e) => {
   }
   if (digits.length >= 3) digits = digits.slice(0, 2) + "/" + digits.slice(2);
   e.target.value = digits;
+  if (digits.length < 5) {
+    $("f-expiry").classList.remove("invalid");
+    $("f-expiry-error").textContent = "";
+  }
+});
+$("f-expiry").addEventListener("blur", (e) => {
+  const msg = expiryError(e.target.value.trim());
+  $("f-expiry-error").textContent = msg;
+  $("f-expiry").classList.toggle("invalid", !!msg);
 });
 function compressImage(file, maxWidth, quality) {
   return new Promise((resolve) => {
@@ -355,17 +398,24 @@ function compressImage(file, maxWidth, quality) {
 $("form-save-btn").onclick = async () => {
   const digits = $("f-number").value.replace(/\D/g, "");
   const expiry = $("f-expiry").value.trim();
-  if (expiry && !/^(0[1-9]|1[0-2])\/\d{2}$/.test(expiry)) {
-    toast("有效期限格式不正確,請輸入 MM/YY");
-    return;
-  }
+
+  const numMsg = digits.length === 0 ? "請輸入卡號" : cardNumberError(digits);
+  $("f-number-error").textContent = numMsg;
+  $("f-number").classList.toggle("invalid", !!numMsg);
+
+  const expMsg = expiryError(expiry);
+  $("f-expiry-error").textContent = expMsg;
+  $("f-expiry").classList.toggle("invalid", !!expMsg);
+
+  if (!$("f-nickname").value.trim()) { toast("請輸入卡片暱稱"); return; }
+  if (numMsg || expMsg) { toast("請確認標紅的欄位"); return; }
+
   const payload = {
     nickname: $("f-nickname").value.trim(),
     number: digits,
     expiry,
     note: $("f-note").value.trim(),
   };
-  if (!payload.nickname || !digits) { toast("至少填寫暱稱與卡號"); return; }
 
   const { iv, cipher } = await encryptJSON(payload, sessionKey);
   const record = { iv, cipher, createdAt: Date.now() };
