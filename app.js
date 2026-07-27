@@ -96,6 +96,15 @@ async function idbAll(store) {
     r.onerror = () => reject(r.error);
   });
 }
+async function idbClear(store) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(store, "readwrite");
+    const r = tx.objectStore(store).clear();
+    r.onsuccess = () => resolve();
+    r.onerror = () => reject(r.error);
+  });
+}
 
 // ---------- Crypto primitives ----------
 async function generateMasterKeyRaw() {
@@ -451,6 +460,87 @@ $("form-save-btn").onclick = async () => {
   toast("已儲存");
   refreshCardList();
 };
+
+// ---------- Backup / restore ----------
+// NOTE: cards/meta are exported exactly as stored — still AES-256-GCM
+// encrypted — plus the autoKey needed to decrypt them, all bundled into
+// one JSON file. This means the exported file itself is as sensitive as
+// the key currently sitting in IndexedDB (see the TEMPORARY note at the
+// top of this file): whoever has the file can decrypt everything. This
+// is a straightforward device-to-device backup mechanism, not an
+// additional security layer — treat the exported file like a password.
+const BACKUP_FORMAT_VERSION = 1;
+
+async function exportData() {
+  try {
+    const meta = await idbGet("meta", "config");
+    const cards = await idbAll("cards");
+    const payload = {
+      format: "jaxcards-backup",
+      version: BACKUP_FORMAT_VERSION,
+      exportedAt: new Date().toISOString(),
+      meta,
+      cards,
+    };
+    const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `jaxcards-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    toast("已匯出");
+  } catch (e) {
+    toast("匯出失敗");
+  }
+}
+
+async function importDataFromFile(file) {
+  let payload;
+  try {
+    const text = await file.text();
+    payload = JSON.parse(text);
+  } catch (e) {
+    toast("檔案格式無法讀取");
+    return;
+  }
+  if (!payload || payload.format !== "jaxcards-backup" || !payload.meta || !Array.isArray(payload.cards)) {
+    toast("這不是有效的 JaxCards 備份檔");
+    return;
+  }
+  const ok = window.confirm(`確定要匯入這份備份嗎?\n\n這會覆蓋目前手機上所有的卡片資料(共 ${payload.cards.length} 張),此動作無法復原。`);
+  if (!ok) return;
+
+  try {
+    await idbClear("cards");
+    await idbPut("meta", payload.meta);
+    for (const card of payload.cards) {
+      await idbPut("cards", card);
+    }
+    // The autoKey may have changed, so re-derive the in-memory session key
+    // from whatever was just imported before redrawing the list.
+    await ensureAutoKey();
+    await refreshCardList();
+    $("backup-backdrop").classList.add("hidden");
+    toast(`已匯入 ${payload.cards.length} 張卡片`);
+  } catch (e) {
+    toast("匯入失敗");
+  }
+}
+
+$("backup-btn").onclick = () => $("backup-backdrop").classList.remove("hidden");
+$("backup-close-btn").onclick = () => $("backup-backdrop").classList.add("hidden");
+$("backup-backdrop").addEventListener("click", (e) => { if (e.target === $("backup-backdrop")) $("backup-backdrop").classList.add("hidden"); });
+$("export-btn").onclick = exportData;
+$("import-btn").onclick = () => $("import-input").click();
+$("import-input").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  e.target.value = ""; // allow re-selecting the same filename later
+  if (file) importDataFromFile(file);
+});
 
 // ---------- boot ----------
 async function boot() {
