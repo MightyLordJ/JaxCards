@@ -100,7 +100,7 @@
 
   /* ---------- Vault list ---------- */
   #vault-screen{
-    padding-bottom:calc(72px + var(--bottom-safe));
+    padding-bottom:calc(78px + env(safe-area-inset-bottom));
     overflow:hidden; /* only #card-list inside scrolls, not this wrapper */
     display:flex; flex-direction:column;
   }
@@ -115,17 +115,15 @@
   .empty{ text-align:center; margin-top:60px; color:var(--muted); }
   .empty .mark{ width:52px;height:36px;border-radius:8px; margin:0 auto 18px; background:linear-gradient(135deg, var(--surface-2), var(--surface)); border:1px solid var(--line); }
 
-  /* Thumbnail picker grid — this is the whole point of the list screen:
-     recognize a card by its face, tap it, then see details. Column count
-     grows with viewport width so it also works on a tablet/desktop window. */
-  .card-grid{
-    display:grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    align-content:start;
-    gap:14px;
-    overflow-y:auto;
-    -webkit-overflow-scrolling:touch;
-    padding-bottom:8px;
+  /* Card list — the first 3 (most-used) cards get their own full-width,
+     slightly-overlapping stack (bigger, easier to tap, Apple Wallet-style);
+     from the 4th card on, a plain fixed 2-column grid takes over. */
+  #card-list{ overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:8px; }
+  .card-stack{ display:flex; flex-direction:column; }
+  .card-stack .card-thumb{ width:100%; }
+  .card-stack .card-thumb:not(:first-child){ margin-top:-30px; }
+  .card-grid-rest{
+    display:grid; grid-template-columns:repeat(2, 1fr); gap:14px; margin-top:22px;
   }
   .card-thumb{
     position:relative; border-radius:var(--radius-card); aspect-ratio:1.586/1; overflow:hidden;
@@ -140,7 +138,7 @@
   }
 
   .fab{
-    position:fixed; left:50%; bottom:var(--bottom-safe); transform:translateX(-50%);
+    position:fixed; left:50%; bottom:calc(14px + env(safe-area-inset-bottom)); transform:translateX(-50%);
     width:calc(100% - 44px); max-width:436px;
   }
   @media (min-width: 640px){ .fab{ max-width:520px; } }
@@ -258,7 +256,7 @@
     <div class="topbar">
       <h1>JaxCards</h1>
       <div style="display:flex;align-items:center;gap:10px;">
-        <span class="version">V1.6.3</span>
+        <span class="version">V1.7.0</span>
         <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -281,7 +279,10 @@
       <div class="mark"></div>
       還沒有任何卡片<br/>點下面的按鈕開始新增
     </div>
-    <div id="card-list" class="card-grid"></div>
+    <div id="card-list">
+      <div class="card-stack" id="card-stack"></div>
+      <div class="card-grid-rest" id="card-grid-rest"></div>
+    </div>
     <button class="btn primary fab" id="add-card-btn">＋ 新增卡片</button>
   </section>
 
