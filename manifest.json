@@ -2,6 +2,7 @@
   "name": "卡片保險箱 Card Vault",
   "short_name": "卡片保險箱",
   "description": "本機加密儲存的信用卡資料庫,離線運作,不連網路",
+  "id": "./index.html",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -9,6 +9,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="mobile-web-app-capable" content="yes" />
 <style>
   :root{
     --bg:#10131A;
@@ -25,9 +26,12 @@
     font-size: 16px;
   }
   *{box-sizing:border-box;}
+  html{ height:100%; overscroll-behavior:none; }
   html,body{height:100%;}
   body{
     margin:0;
+    min-height:100vh;
+    min-height:100dvh;
     background:
       radial-gradient(1200px 600px at 50% -10%, #1a1f2b 0%, var(--bg) 55%);
     color:var(--text);
@@ -41,9 +45,16 @@
     max-width:480px;
     margin:0 auto;
     min-height:100vh;
-    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    min-height:100dvh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     display:flex; flex-direction:column;
     position:relative;
+  }
+  /* Wider viewports (tablet / desktop browser): let the shell breathe
+     instead of staying pinned to a phone-width column. */
+  @media (min-width: 640px){
+    #app{ max-width:720px; }
+    .sheet-backdrop .sheet{ max-width:480px; }
   }
   .mono{ font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 
@@ -127,7 +138,14 @@
   .row2 > .field{ flex:1; }
 
   /* ---------- Vault list ---------- */
-  #vault-screen{ padding-bottom:100px; }
+  #vault-screen{
+    padding-bottom:calc(100px + env(safe-area-inset-bottom));
+    height:100vh; height:100dvh;
+    display:flex; flex-direction:column;
+  }
+  #vault-screen .topbar, #vault-screen .banner{ flex:none; }
+  #vault-screen #empty-state{ flex:none; }
+  #vault-screen #card-list{ flex:1 1 auto; min-height:0; }
   .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
   .topbar h1{ font-size:22px; margin:0; }
   .icon-btn{ width:38px;height:38px;border-radius:50%; background:var(--surface); border:1px solid var(--line); color:var(--muted); font-size:16px; }
@@ -135,24 +153,35 @@
   .empty{ text-align:center; margin-top:60px; color:var(--muted); }
   .empty .mark{ width:52px;height:36px;border-radius:8px; margin:0 auto 18px; background:linear-gradient(135deg, var(--surface-2), var(--surface)); border:1px solid var(--line); }
 
-  .card-list{ display:flex; flex-direction:column; gap:14px; }
-  .card-item{
-    position:relative; border-radius:var(--radius-card); padding:18px; overflow:hidden;
-    border:1px solid rgba(255,255,255,.06);
+  /* Thumbnail picker grid — this is the whole point of the list screen:
+     recognize a card by its face, tap it, then see details. Column count
+     grows with viewport width so it also works on a tablet/desktop window. */
+  .card-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap:14px;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    padding-bottom:8px;
   }
-  .card-item .top{ display:flex; justify-content:space-between; align-items:flex-start; }
-  .card-item .nickname{ font-weight:700; font-size:15.5px; }
-  .card-item .bank{ font-size:12px; color:rgba(237,239,243,.65); margin-top:2px;}
-  .card-item .brand-tag{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; opacity:.75; }
-  .card-item .numberline{ margin-top:22px; font-size:17px; letter-spacing:.06em; }
-  .card-item .bottomline{ display:flex; justify-content:space-between; align-items:flex-end; margin-top:14px; }
-  .card-item .expiry{ font-size:12.5px; opacity:.8; }
-  .card-item .thumb{ width:34px;height:34px;border-radius:8px; object-fit:cover; border:1px solid rgba(255,255,255,.25); }
+  .card-thumb{
+    position:relative; border-radius:var(--radius-card); aspect-ratio:1.586/1; overflow:hidden;
+    border:1px solid rgba(255,255,255,.08); box-shadow:0 6px 16px rgba(0,0,0,.35);
+  }
+  .card-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .card-thumb .placeholder{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+  .card-thumb .placeholder .brand-mark{ font-size:12px; letter-spacing:.08em; text-transform:uppercase; opacity:.8; font-weight:700; }
+  .card-thumb .caption{
+    position:absolute; left:0; right:0; bottom:0; padding:8px 10px 7px;
+    background:linear-gradient(0deg, rgba(0,0,0,.65), rgba(0,0,0,0));
+    font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
 
   .fab{
-    position:fixed; left:50%; bottom:28px; transform:translateX(-50%);
+    position:fixed; left:50%; bottom:calc(28px + env(safe-area-inset-bottom)); transform:translateX(-50%);
     width:calc(100% - 44px); max-width:436px;
   }
+  @media (min-width: 640px){ .fab{ max-width:520px; } }
 
   /* ---------- Sheet / modal ---------- */
   .sheet-backdrop{
@@ -256,7 +285,7 @@
       <div class="mark"></div>
       還沒有任何卡片<br/>點下面的按鈕開始新增
     </div>
-    <div id="card-list" class="card-list"></div>
+    <div id="card-list" class="card-grid"></div>
     <button class="btn primary fab" id="add-card-btn">＋ 新增卡片</button>
   </section>
 

@@ -167,8 +167,20 @@ function scheduleAutoLock() {
   clearTimeout(lockTimer);
   lockTimer = setTimeout(lockVault, AUTO_LOCK_MS);
 }
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) lockVault();
+document.addEventListener("visibilitychange", async () => {
+  if (document.hidden) {
+    // Just drop the in-memory key. Do NOT touch WebAuthn here — a
+    // biometric prompt can't run against a backgrounded page anyway, and
+    // trying to fire one mid-transition is a likely reason it felt like
+    // Face ID needed an extra manual tap.
+    sessionKey = null;
+    return;
+  }
+  if (sessionKey) return; // still unlocked, nothing to do
+  const meta = await idbGet("meta", "config");
+  if (!meta) return; // mid-setup flow, leave it alone
+  if (!$("vault-screen").classList.contains("hidden")) showLockScreen();
+  attemptAutoFaceID(meta);
 });
 
 function showScreen(id) {
@@ -387,6 +399,8 @@ async function lockVault() {
   sessionKey = null;
   pinBuffer = "";
   showLockScreen();
+  const meta = await idbGet("meta", "config");
+  if (meta) attemptAutoFaceID(meta);
 }
 async function showLockScreen() {
   const meta = await idbGet("meta", "config");
@@ -394,6 +408,7 @@ async function showLockScreen() {
   pinBuffer = "";
   renderDots($("lock-dots"), 0);
   $("lock-error").textContent = "";
+  $("lock-subtitle").textContent = "輸入 PIN 碼解鎖你的卡片";
   buildKeypad($("lock-keypad"), {
     onDigit: async (d) => {
       pinBuffer += d;
@@ -410,13 +425,20 @@ async function showLockScreen() {
   });
   $("use-faceid-btn").classList.toggle("hidden", !meta.credentialId);
   showScreen("lock-screen");
+}
 
-  if (meta.credentialId) {
-    // Offer Face ID immediately on load for convenience.
-    const result = await tryFaceIDUnlock();
-    if (result === true) { enterVault(); return; }
-    if (result === "gate-passed") { $("lock-subtitle").textContent = "生物辨識通過,請輸入 PIN 完成解鎖"; }
-  }
+// Runs the biometric prompt without waiting for a tap. Safe to call
+// speculatively — it no-ops if there's no enrolled credential, and bails
+// out cleanly if the vault got unlocked some other way while it was
+// awaiting the prompt.
+async function attemptAutoFaceID(meta) {
+  if (!meta || !meta.credentialId || sessionKey) return;
+  $("lock-subtitle").textContent = "正在使用 Face ID 解鎖…";
+  const result = await tryFaceIDUnlock();
+  if (sessionKey) return; // unlocked via PIN while this was pending
+  if (result === true) { enterVault(); return; }
+  if (result === "gate-passed") { $("lock-subtitle").textContent = "生物辨識通過,請輸入 PIN 完成解鎖"; return; }
+  $("lock-subtitle").textContent = "輸入 PIN 碼解鎖你的卡片";
 }
 async function attemptPinUnlock(meta) {
   try {
@@ -436,10 +458,7 @@ async function attemptPinUnlock(meta) {
 
 $("use-faceid-btn").addEventListener("click", async () => {
   const meta = await idbGet("meta", "config");
-  const result = await tryFaceIDUnlock();
-  if (result === true) enterVault();
-  else if (result === "gate-passed") $("lock-subtitle").textContent = "生物辨識通過,請輸入 PIN 完成解鎖";
-  else toast("Face ID 未成功,請用 PIN 解鎖");
+  await attemptAutoFaceID(meta);
 });
 
 // ---------- Vault (main list) ----------
@@ -482,21 +501,25 @@ async function refreshCardList() {
     catch (e) { continue; }
     const brand = detectBrand(data.number || "");
     const el = document.createElement("div");
-    el.className = "card-item";
-    el.style.background = brand.grad;
-    el.innerHTML = `
-      <div class="top">
-        <div>
-          <div class="nickname">${escapeHtml(data.nickname || "未命名卡片")}</div>
-          <div class="bank">${escapeHtml(data.bank || "")}</div>
-        </div>
-        <div class="brand-tag">${brand.name}</div>
-      </div>
-      <div class="numberline mono">${formatNumberMasked(data.number || "")}</div>
-      <div class="bottomline">
-        <div class="expiry mono">${escapeHtml(data.expiry || "")}</div>
-      </div>
-    `;
+    el.className = "card-thumb";
+
+    if (card.photoCipher) {
+      try {
+        const photoUrl = await decryptString(card.photoIv, card.photoCipher, sessionKey);
+        el.innerHTML = `<img src="${photoUrl}" alt="" />`;
+      } catch (e) {
+        el.style.background = brand.grad;
+        el.innerHTML = `<div class="placeholder"><span class="brand-mark">${brand.name}</span></div>`;
+      }
+    } else {
+      el.style.background = brand.grad;
+      el.innerHTML = `<div class="placeholder"><span class="brand-mark">${brand.name}</span></div>`;
+    }
+    const caption = document.createElement("div");
+    caption.className = "caption";
+    caption.textContent = data.nickname || "未命名卡片";
+    el.appendChild(caption);
+
     el.onclick = () => openDetail(card.id);
     list.appendChild(el);
   }
@@ -682,12 +705,22 @@ $("lock-now-btn").onclick = lockVault;
 async function boot() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
+    // A new SW version installs in the background (skipWaiting) and takes
+    // over on its own; reload once so the update is actually visible
+    // instead of sitting there until the next manual refresh.
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloading) return;
+      reloading = true;
+      window.location.reload();
+    });
   }
   const meta = await idbGet("meta", "config");
   if (!meta) {
     startSetupFlow();
-  } else {
-    showLockScreen();
+    return;
   }
+  await showLockScreen();
+  if (document.visibilityState === "visible") attemptAutoFaceID(meta);
 }
 boot();
