@@ -238,12 +238,11 @@ async function openDetail(id) {
   catch (e) { toast("解密失敗"); return; }
   const brand = detectBrand(data.number || "");
 
-  // CVV is never shown as-is: pick a fresh random offset every time this
-  // screen opens, shift every digit by it, and hide the offset itself in
-  // the hint line below — dot COUNT encodes magnitude (1 or 2), dot
-  // POSITION encodes sign (end = positive, start = negative). Only
-  // someone who knows this rule can mentally reverse the shift; a glance
-  // at the screen alone doesn't reveal the real CVV.
+  // Dot placement signals the DECODE operation, not the raw offset sign:
+  // offset > 0 means displayed = real + offset, so getting back to the
+  // real CVV means subtracting — that's what the leading dot means.
+  // offset < 0 means displayed = real - |offset|, so decoding means
+  // adding — trailing dot. Dot count = magnitude (1 or 2).
   const baseHint = "複製的卡號會在 20 秒後自動從剪貼簿清除";
   let cvvRowHtml = "";
   let hintHtml = escapeHtml(baseHint);
@@ -251,7 +250,7 @@ async function openDetail(id) {
     const offset = [-2, -1, 1, 2][Math.floor(Math.random() * 4)];
     const decoyCvv = shiftDigits(data.cvv, offset);
     const dots = ".".repeat(Math.abs(offset));
-    hintHtml = offset > 0 ? `${escapeHtml(baseHint)}${dots}` : `${dots}${escapeHtml(baseHint)}`;
+    hintHtml = offset > 0 ? `${dots}${escapeHtml(baseHint)}` : `${escapeHtml(baseHint)}${dots}`;
     cvvRowHtml = `<div class="detail-row"><span>CVV</span><span class="mono">${escapeHtml(decoyCvv)}</span></div>`;
   }
 
