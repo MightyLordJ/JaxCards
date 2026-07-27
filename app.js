@@ -268,8 +268,9 @@ async function openReorderScreen() {
 }
 
 function reorderPointerDown(e) {
-  const row = e.currentTarget.closest(".reorder-row");
-  e.currentTarget.setPointerCapture(e.pointerId);
+  const row = e.target.closest(".reorder-row");
+  if (!row) return;
+  e.target.setPointerCapture(e.pointerId);
   reorderDragEl = row;
   reorderStartY = e.clientY;
   reorderRowH = row.offsetHeight + 8; // + row's margin-bottom
