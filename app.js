@@ -233,10 +233,14 @@ async function openDetail(id) {
       <div class="bank">${brand.name}</div>
       <div class="numberline mono">
         <span>${formatNumberFull(data.number || "")}</span>
-        <button class="copy-btn" id="copy-btn">複製</button>
+        <button class="copy-btn" id="copy-btn" aria-label="複製卡號">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="8" y="8" width="12" height="12" rx="2"/>
+            <path d="M5 15.5A2 2 0 0 1 4 14V6a2 2 0 0 1 2-2h8a2 2 0 0 1 1.7.9"/>
+          </svg>
+        </button>
       </div>
       <div class="detail-row"><span>有效期限</span><span class="mono">${escapeHtml(data.expiry || "—")}</span></div>
-      <div class="detail-row"><span>持卡人</span><span>${escapeHtml(data.holder || "—")}</span></div>
     </div>
     ${data.note ? `<div><div class="detail-row"><span>備註</span><span></span></div><div class="note-box">${escapeHtml(data.note)}</div></div>` : ""}
     <div class="copy-hint">複製的卡號會在 20 秒後自動從剪貼簿清除</div>
@@ -269,7 +273,6 @@ function closeDetail() {
   $("detail-backdrop").classList.add("hidden");
   currentDetailId = null;
 }
-$("detail-close-btn").onclick = closeDetail;
 $("detail-backdrop").addEventListener("click", (e) => { if (e.target === $("detail-backdrop")) closeDetail(); });
 
 // ---------- Add / edit form ----------
@@ -283,7 +286,6 @@ function openForm(existingCard, existingData) {
   $("f-nickname").value = existingData?.nickname || "";
   $("f-number").value = existingData?.number ? formatNumberFull(existingData.number) : "";
   $("f-expiry").value = existingData?.expiry || "";
-  $("f-holder").value = existingData?.holder || "";
   $("f-note").value = existingData?.note || "";
 
   const preview = $("photo-preview");
@@ -301,8 +303,7 @@ $("add-card-btn").onclick = () => openForm(null, null);
 $("form-cancel-btn").onclick = () => { $("form-backdrop").classList.add("hidden"); editingCardId = null; };
 $("form-backdrop").addEventListener("click", (e) => { if (e.target === $("form-backdrop")) { $("form-backdrop").classList.add("hidden"); } });
 
-$("photo-camera-btn").onclick = () => $("photo-input-camera").click();
-$("photo-library-btn").onclick = () => $("photo-input-library").click();
+$("photo-preview").onclick = () => $("photo-input").click();
 async function handlePhotoFile(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -310,11 +311,26 @@ async function handlePhotoFile(e) {
   pendingPhotoDataUrl = dataUrl;
   $("photo-preview").innerHTML = `<img src="${dataUrl}" />`;
 }
-$("photo-input-camera").addEventListener("change", handlePhotoFile);
-$("photo-input-library").addEventListener("change", handlePhotoFile);
+$("photo-input").addEventListener("change", handlePhotoFile);
+
+$("f-number").addEventListener("input", (e) => {
+  const digits = e.target.value.replace(/\D/g, "").slice(0, 19);
+  e.target.value = digits.replace(/(.{4})/g, "$1 ").trim();
+});
 
 $("f-expiry").addEventListener("input", (e) => {
   let digits = e.target.value.replace(/\D/g, "").slice(0, 4);
+  if (digits.length >= 1) {
+    // Clamp the month as it's typed: 00->01, anything above 12 caps at 12.
+    let mm = digits.slice(0, 2);
+    if (mm.length === 2) {
+      let n = parseInt(mm, 10);
+      if (n === 0) n = 1;
+      if (n > 12) n = 12;
+      mm = String(n).padStart(2, "0");
+      digits = mm + digits.slice(2);
+    }
+  }
   if (digits.length >= 3) digits = digits.slice(0, 2) + "/" + digits.slice(2);
   e.target.value = digits;
 });
@@ -338,11 +354,15 @@ function compressImage(file, maxWidth, quality) {
 
 $("form-save-btn").onclick = async () => {
   const digits = $("f-number").value.replace(/\D/g, "");
+  const expiry = $("f-expiry").value.trim();
+  if (expiry && !/^(0[1-9]|1[0-2])\/\d{2}$/.test(expiry)) {
+    toast("有效期限格式不正確,請輸入 MM/YY");
+    return;
+  }
   const payload = {
     nickname: $("f-nickname").value.trim(),
     number: digits,
-    expiry: $("f-expiry").value.trim(),
-    holder: $("f-holder").value.trim(),
+    expiry,
     note: $("f-note").value.trim(),
   };
   if (!payload.nickname || !digits) { toast("至少填寫暱稱與卡號"); return; }
@@ -367,33 +387,6 @@ $("form-save-btn").onclick = async () => {
   toast("已儲存");
   refreshCardList();
 };
-
-// ---------- Viewport height ----------
-// Same technique as jaxmoney: window.innerHeight / visualViewport.height
-// can get transiently stuck on a wrong value around cold-start/rotation
-// on iOS. screen.height/width + screen.orientation.type stay correct
-// through that window, so layout height is derived from those instead.
-function trustedViewportHeight() {
-  const s = window.screen;
-  const o = s && s.orientation;
-  if (s && o && typeof o.type === "string") {
-    const isPortrait = o.type.indexOf("portrait") === 0;
-    const h = isPortrait ? s.height : s.width;
-    if (h) return h;
-  }
-  return window.innerHeight;
-}
-function setAppHeight() {
-  document.documentElement.style.setProperty("--app-h", trustedViewportHeight() + "px");
-}
-window.addEventListener("load", setAppHeight);
-window.addEventListener("resize", setAppHeight);
-window.addEventListener("orientationchange", setAppHeight);
-window.addEventListener("pageshow", setAppHeight);
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") setAppHeight();
-});
-setAppHeight();
 
 // ---------- boot ----------
 async function boot() {
