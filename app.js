@@ -462,25 +462,44 @@ $("form-save-btn").onclick = async () => {
 };
 
 // ---------- Backup / restore ----------
-// NOTE: cards/meta are exported exactly as stored — still AES-256-GCM
-// encrypted — plus the autoKey needed to decrypt them, all bundled into
-// one JSON file. This means the exported file itself is as sensitive as
-// the key currently sitting in IndexedDB (see the TEMPORARY note at the
-// top of this file): whoever has the file can decrypt everything. This
-// is a straightforward device-to-device backup mechanism, not an
-// additional security layer — treat the exported file like a password.
-const BACKUP_FORMAT_VERSION = 1;
+// The whole backup payload (meta + cards) is encrypted with a key derived
+// from a password the user sets at export time (PBKDF2-SHA256 -> AES-256-GCM).
+// Nothing in the exported file can be decrypted without that password —
+// unlike the app's own in-memory key, this is a real secret the user holds,
+// so losing the password means losing the backup, on purpose.
+const BACKUP_FORMAT_VERSION = 2;
+const PBKDF2_ITERATIONS = 600000; // OWASP-recommended floor for PBKDF2-SHA256 as of 2023+
 
-async function exportData() {
+async function deriveKeyFromPassword(password, saltBytes, iterations) {
+  const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt: saltBytes, iterations, hash: "SHA-256" },
+    keyMaterial,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+async function exportDataEncrypted(password) {
   try {
     const meta = await idbGet("meta", "config");
     const cards = await idbAll("cards");
+    const inner = JSON.stringify({ meta, cards });
+
+    const salt = randomBytes(16);
+    const iv = randomBytes(12);
+    const key = await deriveKeyFromPassword(password, salt, PBKDF2_ITERATIONS);
+    const cipherBuf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc.encode(inner));
+
     const payload = {
       format: "jaxcards-backup",
       version: BACKUP_FORMAT_VERSION,
       exportedAt: new Date().toISOString(),
-      meta,
-      cards,
+      kdf: { name: "PBKDF2", hash: "SHA-256", iterations: PBKDF2_ITERATIONS, salt: bufToB64(salt) },
+      iv: bufToB64(iv),
+      cipher: bufToB64(cipherBuf),
+      cardCount: cards.length, // shown before decrypting, so the confirm dialog can mention it
     };
     const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -493,54 +512,107 @@ async function exportData() {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 2000);
     toast("已匯出");
+    return true;
   } catch (e) {
     toast("匯出失敗");
+    return false;
   }
 }
 
-async function importDataFromFile(file) {
+let pendingImportFile = null;
+
+async function importDataEncrypted(file, password) {
   let payload;
   try {
     const text = await file.text();
     payload = JSON.parse(text);
   } catch (e) {
     toast("檔案格式無法讀取");
-    return;
+    return false;
   }
-  if (!payload || payload.format !== "jaxcards-backup" || !payload.meta || !Array.isArray(payload.cards)) {
+  if (!payload || payload.format !== "jaxcards-backup" || payload.version !== BACKUP_FORMAT_VERSION || !payload.kdf || !payload.cipher) {
     toast("這不是有效的 JaxCards 備份檔");
-    return;
+    return false;
   }
-  const ok = window.confirm(`確定要匯入這份備份嗎?\n\n這會覆蓋目前手機上所有的卡片資料(共 ${payload.cards.length} 張),此動作無法復原。`);
-  if (!ok) return;
+
+  let inner;
+  try {
+    const salt = new Uint8Array(b64ToBuf(payload.kdf.salt));
+    const iv = new Uint8Array(b64ToBuf(payload.iv));
+    const key = await deriveKeyFromPassword(password, salt, payload.kdf.iterations || PBKDF2_ITERATIONS);
+    const plainBuf = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, b64ToBuf(payload.cipher));
+    inner = JSON.parse(dec.decode(plainBuf));
+  } catch (e) {
+    // AES-GCM auth failure (wrong password) and JSON parse errors both land here
+    $("import-pw-error").textContent = "密碼錯誤,或檔案已損壞";
+    return false;
+  }
+
+  const ok = window.confirm(`確定要匯入這份備份嗎?\n\n這會覆蓋目前手機上所有的卡片資料(共 ${inner.cards.length} 張),此動作無法復原。`);
+  if (!ok) return false;
 
   try {
     await idbClear("cards");
-    await idbPut("meta", payload.meta);
-    for (const card of payload.cards) {
+    await idbPut("meta", inner.meta);
+    for (const card of inner.cards) {
       await idbPut("cards", card);
     }
-    // The autoKey may have changed, so re-derive the in-memory session key
-    // from whatever was just imported before redrawing the list.
     await ensureAutoKey();
     await refreshCardList();
-    $("backup-backdrop").classList.add("hidden");
-    toast(`已匯入 ${payload.cards.length} 張卡片`);
+    toast(`已匯入 ${inner.cards.length} 張卡片`);
+    return true;
   } catch (e) {
     toast("匯入失敗");
+    return false;
   }
 }
 
-$("backup-btn").onclick = () => $("backup-backdrop").classList.remove("hidden");
-$("backup-close-btn").onclick = () => $("backup-backdrop").classList.add("hidden");
-$("backup-backdrop").addEventListener("click", (e) => { if (e.target === $("backup-backdrop")) $("backup-backdrop").classList.add("hidden"); });
-$("export-btn").onclick = exportData;
+function showBackupStep(step) {
+  $("backup-main").classList.toggle("hidden", step !== "main");
+  $("backup-export-step").classList.toggle("hidden", step !== "export");
+  $("backup-import-step").classList.toggle("hidden", step !== "import");
+}
+function closeBackupSheet() {
+  $("backup-backdrop").classList.add("hidden");
+  showBackupStep("main");
+  $("export-pw").value = ""; $("export-pw-confirm").value = ""; $("export-pw-error").textContent = "";
+  $("import-pw").value = ""; $("import-pw-error").textContent = "";
+  pendingImportFile = null;
+}
+
+$("backup-btn").onclick = () => { $("backup-backdrop").classList.remove("hidden"); showBackupStep("main"); };
+$("backup-close-btn").onclick = closeBackupSheet;
+$("backup-backdrop").addEventListener("click", (e) => { if (e.target === $("backup-backdrop")) closeBackupSheet(); });
+
+$("export-btn").onclick = () => showBackupStep("export");
+$("export-pw-cancel").onclick = () => showBackupStep("main");
+$("export-pw-confirm-btn").onclick = async () => {
+  const pw = $("export-pw").value;
+  const pw2 = $("export-pw-confirm").value;
+  if (pw.length < 6) { $("export-pw-error").textContent = "密碼至少要 6 碼"; return; }
+  if (pw !== pw2) { $("export-pw-error").textContent = "兩次輸入的密碼不一致"; return; }
+  $("export-pw-error").textContent = "";
+  const success = await exportDataEncrypted(pw);
+  if (success) closeBackupSheet();
+};
+
 $("import-btn").onclick = () => $("import-input").click();
 $("import-input").addEventListener("change", (e) => {
   const file = e.target.files[0];
-  e.target.value = ""; // allow re-selecting the same filename later
-  if (file) importDataFromFile(file);
+  e.target.value = "";
+  if (!file) return;
+  pendingImportFile = file;
+  $("import-pw-error").textContent = "";
+  showBackupStep("import");
 });
+$("import-pw-cancel").onclick = () => { pendingImportFile = null; showBackupStep("main"); };
+$("import-pw-confirm-btn").onclick = async () => {
+  if (!pendingImportFile) return;
+  const pw = $("import-pw").value;
+  if (!pw) { $("import-pw-error").textContent = "請輸入密碼"; return; }
+  const success = await importDataEncrypted(pendingImportFile, pw);
+  if (success) closeBackupSheet();
+};
 
 // ---------- boot ----------
 async function boot() {

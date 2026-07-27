@@ -200,7 +200,7 @@
     <div class="topbar">
       <h1>JaxCards</h1>
       <div style="display:flex;align-items:center;gap:10px;">
-        <span class="version">V1.1.0</span>
+        <span class="version">V1.2.0</span>
         <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -265,14 +265,39 @@
 <div id="backup-backdrop" class="sheet-backdrop hidden">
   <div class="sheet">
     <div class="grabber"></div>
-    <h2>備份與還原</h2>
-    <div class="banner">
-      匯出的檔案裡包含解密用的金鑰,等同於一把能打開所有卡片的鑰匙。<b>請把它當密碼一樣妥善保管</b>,不要隨意傳給別人或放在公開的地方。
+
+    <div id="backup-main">
+      <h2>備份與還原</h2>
+      <div class="banner">
+        匯出的檔案會用你設定的密碼加密。<b>請記住這組密碼</b>——之後要在別的裝置匯入時需要輸入,忘記密碼的話這份備份檔就沒辦法還原了。
+      </div>
+      <button class="btn block" id="export-btn" style="margin-bottom:10px;">匯出資料成檔案</button>
+      <button class="btn block" id="import-btn">從檔案匯入</button>
+      <input type="file" accept="application/json" id="import-input" class="hidden" />
+      <button class="link" id="backup-close-btn">關閉</button>
     </div>
-    <button class="btn block" id="export-btn" style="margin-bottom:10px;">匯出資料成檔案</button>
-    <button class="btn block" id="import-btn">從檔案匯入</button>
-    <input type="file" accept="application/json" id="import-input" class="hidden" />
-    <button class="link" id="backup-close-btn">關閉</button>
+
+    <div id="backup-export-step" class="hidden">
+      <h2>設定備份密碼</h2>
+      <div class="field"><label>密碼(至少 6 碼)</label><input type="password" id="export-pw" /></div>
+      <div class="field"><label>再輸入一次</label><input type="password" id="export-pw-confirm" /></div>
+      <div class="field-error" id="export-pw-error"></div>
+      <div class="sheet-actions">
+        <button class="btn" id="export-pw-cancel">取消</button>
+        <button class="btn primary" id="export-pw-confirm-btn">匯出</button>
+      </div>
+    </div>
+
+    <div id="backup-import-step" class="hidden">
+      <h2>輸入備份密碼</h2>
+      <div class="field"><label>密碼</label><input type="password" id="import-pw" /></div>
+      <div class="field-error" id="import-pw-error"></div>
+      <div class="sheet-actions">
+        <button class="btn" id="import-pw-cancel">取消</button>
+        <button class="btn primary" id="import-pw-confirm-btn">匯入</button>
+      </div>
+    </div>
+
   </div>
 </div>
 
