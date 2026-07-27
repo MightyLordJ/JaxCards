@@ -6,7 +6,7 @@
 <title>JaxCards</title>
 <meta name="theme-color" content="#10131A" />
 <link rel="manifest" href="manifest.json" />
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="mobile-web-app-capable" content="yes" />
@@ -133,12 +133,10 @@
   }
   .card-thumb.no-photo{ background:linear-gradient(135deg, rgba(94,92,230,.38), rgba(94,92,230,.12)); }
   .card-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
-  .card-thumb .placeholder{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
-  .card-thumb .placeholder .brand-mark{ font-size:12px; letter-spacing:.08em; text-transform:uppercase; opacity:.85; font-weight:700; color:#fff; }
-  .card-thumb .caption{
-    position:absolute; left:0; right:0; bottom:0; padding:8px 10px 7px;
-    background:linear-gradient(0deg, rgba(0,0,0,.65), rgba(0,0,0,0));
-    font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  .card-thumb .placeholder{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; padding:10px; }
+  .card-thumb .placeholder .name-mark{
+    font-size:16px; font-weight:700; color:#fff; text-align:center; line-height:1.3;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
   }
 
   .fab{
@@ -201,7 +199,7 @@
   <section id="vault-screen" class="screen hidden">
     <div class="topbar">
       <h1>JaxCards</h1>
-      <span class="version">V1.0.0</span>
+      <span class="version">V1.0.1</span>
     </div>
     <div class="banner"><b>離線運作</b> · 所有資料加密存在本機 IndexedDB,這個 App 不會連線到任何伺服器。</div>
     <div id="empty-state" class="empty hidden">

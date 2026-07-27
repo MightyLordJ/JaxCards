@@ -1,12 +1,12 @@
 // Bump this on every release so updated assets actually reach installed
 // devices — same convention as jaxmoney (CACHE_NAME -> vN).
-const CACHE_NAME = "cardvault-shell-v8";
+const CACHE_NAME = "cardvault-shell-v9";
 const ASSETS = [
   "./",
   "./index.html",
   "./app.js",
   "./manifest.json",
-  "./icons/apple-touch-icon.png"
+  "./apple-touch-icon.png"
 ];
 
 self.addEventListener("install", (event) => {

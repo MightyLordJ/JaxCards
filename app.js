@@ -185,7 +185,6 @@ async function refreshCardList() {
     let data;
     try { data = await decryptJSON(card.iv, card.cipher, sessionKey); }
     catch (e) { continue; }
-    const brand = detectBrand(data.number || "");
     const el = document.createElement("div");
     el.className = "card-thumb";
 
@@ -195,16 +194,12 @@ async function refreshCardList() {
         el.innerHTML = `<img src="${photoUrl}" alt="" />`;
       } catch (e) {
         el.classList.add("no-photo");
-        el.innerHTML = `<div class="placeholder"><span class="brand-mark">${brand.name}</span></div>`;
+        el.innerHTML = `<div class="placeholder"><span class="name-mark">${escapeHtml(data.nickname || "未命名卡片")}</span></div>`;
       }
     } else {
       el.classList.add("no-photo");
-      el.innerHTML = `<div class="placeholder"><span class="brand-mark">${brand.name}</span></div>`;
+      el.innerHTML = `<div class="placeholder"><span class="name-mark">${escapeHtml(data.nickname || "未命名卡片")}</span></div>`;
     }
-    const caption = document.createElement("div");
-    caption.className = "caption";
-    caption.textContent = data.nickname || "未命名卡片";
-    el.appendChild(caption);
 
     el.onclick = () => openDetail(card.id);
     list.appendChild(el);
