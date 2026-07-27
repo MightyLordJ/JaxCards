@@ -180,7 +180,7 @@ document.addEventListener("visibilitychange", async () => {
   const meta = await idbGet("meta", "config");
   if (!meta) return; // mid-setup flow, leave it alone
   if (!$("vault-screen").classList.contains("hidden")) showLockScreen();
-  attemptAutoFaceID(meta);
+  offerFaceID(meta);
 });
 
 function showScreen(id) {
@@ -400,7 +400,7 @@ async function lockVault() {
   pinBuffer = "";
   showLockScreen();
   const meta = await idbGet("meta", "config");
-  if (meta) attemptAutoFaceID(meta);
+  if (meta) offerFaceID(meta);
 }
 async function showLockScreen() {
   const meta = await idbGet("meta", "config");
@@ -440,6 +440,30 @@ async function attemptAutoFaceID(meta) {
   if (result === "gate-passed") { $("lock-subtitle").textContent = "生物辨識通過,請輸入 PIN 完成解鎖"; return; }
   $("lock-subtitle").textContent = "輸入 PIN 碼解鎖你的卡片";
 }
+
+// iOS/Android both require a real tap before they'll show the biometric
+// prompt — a page-load or visibility event alone isn't enough, no matter
+// how the JS calls it. This overlay makes literally the first touch
+// anywhere on the lock screen count as that tap, so there's no separate
+// button to find. It removes itself after firing once so the keypad
+// underneath works normally afterwards.
+function armFaceIDCatcher(meta) {
+  const screen = $("lock-screen");
+  const existing = screen.querySelector(".faceid-catcher");
+  if (existing) existing.remove();
+  if (!meta || !meta.credentialId) return;
+  const catcher = document.createElement("div");
+  catcher.className = "faceid-catcher";
+  catcher.addEventListener("pointerdown", () => {
+    catcher.remove();
+    attemptAutoFaceID(meta);
+  }, { once: true });
+  screen.appendChild(catcher);
+}
+async function offerFaceID(meta) {
+  armFaceIDCatcher(meta);
+  await attemptAutoFaceID(meta); // fires immediately too, in case the platform allows it without an extra tap
+}
 async function attemptPinUnlock(meta) {
   try {
     const salt = new Uint8Array(b64ToBuf(meta.salt));
@@ -469,10 +493,6 @@ function detectBrand(numberDigits) {
   if (/^3[47]/.test(numberDigits)) return { name: "AMEX", grad: "linear-gradient(135deg,#33255c,#5b3a99)" };
   if (/^6/.test(numberDigits)) return { name: "Discover/其他", grad: "linear-gradient(135deg,#173a3d,#1f6b6b)" };
   return { name: "卡片", grad: "linear-gradient(135deg,#232838,#171b24)" };
-}
-function formatNumberMasked(digits) {
-  const last4 = digits.slice(-4);
-  return `•••• •••• •••• ${last4}`;
 }
 function formatNumberFull(digits) {
   return digits.replace(/(.{4})/g, "$1 ").trim();
@@ -541,37 +561,21 @@ async function openDetail(id) {
   catch (e) { toast("解密失敗"); return; }
   const brand = detectBrand(data.number || "");
 
-  let photoTag = "";
-  if (card.photoCipher) {
-    try {
-      const photoDataUrl = await decryptString(card.photoIv, card.photoCipher, sessionKey);
-      photoTag = `<img class="detail-photo" src="${photoDataUrl}" />`;
-    } catch (e) { /* ignore */ }
-  }
-
   $("detail-content").innerHTML = `
     <div class="detail-card" style="background:${brand.grad}">
       <div class="nickname">${escapeHtml(data.nickname || "未命名卡片")}</div>
       <div class="bank">${escapeHtml(data.bank || "")} · ${brand.name}</div>
-      <div class="numberline mono" id="detail-number">
-        <span id="detail-number-text">${formatNumberMasked(data.number || "")}</span>
-        <button class="reveal-btn" id="reveal-btn">顯示</button>
-        <button class="reveal-btn" id="copy-btn">複製</button>
+      <div class="numberline mono">
+        <span>${formatNumberFull(data.number || "")}</span>
+        <button class="copy-btn" id="copy-btn">複製</button>
       </div>
       <div class="detail-row"><span>有效期限</span><span class="mono">${escapeHtml(data.expiry || "—")}</span></div>
       <div class="detail-row"><span>持卡人</span><span>${escapeHtml(data.holder || "—")}</span></div>
     </div>
-    ${photoTag}
     ${data.note ? `<div><div class="detail-row"><span>備註</span><span></span></div><div class="note-box">${escapeHtml(data.note)}</div></div>` : ""}
     <div class="copy-hint">複製的卡號會在 20 秒後自動從剪貼簿清除</div>
   `;
 
-  let revealed = false;
-  $("reveal-btn").onclick = () => {
-    revealed = !revealed;
-    $("detail-number-text").textContent = revealed ? formatNumberFull(data.number || "") : formatNumberMasked(data.number || "");
-    $("reveal-btn").textContent = revealed ? "隱藏" : "顯示";
-  };
   $("copy-btn").onclick = async () => {
     try {
       await navigator.clipboard.writeText((data.number || "").replace(/\s/g, ""));
@@ -721,6 +725,6 @@ async function boot() {
     return;
   }
   await showLockScreen();
-  if (document.visibilityState === "visible") attemptAutoFaceID(meta);
+  if (document.visibilityState === "visible") offerFaceID(meta);
 }
 boot();
