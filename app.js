@@ -217,13 +217,31 @@ async function refreshCardList() {
     stack.appendChild(el);
   }
   updateCardListAlignment();
+  if (typeof printDebugReadout === "function") printDebugReadout();
 }
 
 // Centers the card stack when it's short enough to fit, falls back to
 // top-aligned + scrollable once there are enough cards to overflow — a
 // plain JS measurement instead of CSS `justify-content: safe center`,
 // since that keyword isn't supported before Safari 18.
+// Forces #card-list's height to exactly fill the real remaining space in
+// #vault-screen, measured directly via getBoundingClientRect — this
+// sidesteps relying on flex:1 to stretch it (which wasn't visibly taking
+// effect) with plain arithmetic on actual rendered positions instead.
+// Overflow (more cards than fit) is already handled by #card-list's own
+// overflow-y:auto, so forcing an explicit height here is safe either way.
+function sizeCardList() {
+  const vaultScreen = $("vault-screen");
+  const list = $("card-list");
+  if (!vaultScreen || !list) return;
+  const vaultRect = vaultScreen.getBoundingClientRect();
+  const listRect = list.getBoundingClientRect();
+  const h = vaultRect.bottom - listRect.top;
+  list.style.height = Math.max(0, h) + "px";
+}
+
 function updateCardListAlignment() {
+  sizeCardList();
   const list = $("card-list");
   const stack = $("card-stack");
   if (!list || !stack) return;
@@ -916,6 +934,32 @@ $("import-pw-confirm-btn").onclick = async () => {
 // actually be over-constrained and could reintroduce the exact bug this
 // was trying to fix. The card-list centering re-check on resize/
 // orientationchange is already wired near refreshCardList above.
+
+// TEMP DIAGNOSTIC — prints exact measured box dimensions on-screen so we
+// can read real numbers instead of interpreting screenshots.
+function printDebugReadout() {
+  const el = $("debug-readout");
+  if (!el) return;
+  const rect = (id) => {
+    const node = document.getElementById(id);
+    if (!node) return `${id}: (not found)`;
+    const r = node.getBoundingClientRect();
+    return `${id}: top=${r.top.toFixed(0)} bottom=${r.bottom.toFixed(0)} h=${r.height.toFixed(0)}`;
+  };
+  const lines = [
+    `window.innerHeight=${window.innerHeight}  screen.height=${window.screen.height}  visualViewport.height=${window.visualViewport ? window.visualViewport.height.toFixed(0) : "n/a"}`,
+    rect("app"),
+    rect("vault-screen"),
+    rect("card-list"),
+    rect("card-stack"),
+  ];
+  el.textContent = lines.join("\n");
+}
+window.addEventListener("load", printDebugReadout);
+window.addEventListener("resize", () => requestAnimationFrame(printDebugReadout));
+window.addEventListener("orientationchange", () => setTimeout(printDebugReadout, 300));
+setTimeout(printDebugReadout, 500);
+setTimeout(printDebugReadout, 1500);
 
 // ---------- boot ----------
 async function boot() {
