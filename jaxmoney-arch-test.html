@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>架構測試</title>
+<meta name="theme-color" content="#10131A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  :root{
+    --page-bg: #10131A;
+    --accent: #5E5CE6;
+  }
+  *{box-sizing:border-box;}
+  html{ touch-action: manipulation; }
+  html, body{ height:100%; height:100dvh; }
+  body{
+    margin:0;
+    background: var(--page-bg);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", sans-serif;
+    color:#EDEFF3;
+    -webkit-font-smoothing:antialiased;
+  }
+  html, body{ overscroll-behavior: none; overflow: hidden; }
+
+  /* ---------- JaxMoney's original header/canvas-wrap mechanism, unchanged ---------- */
+  .board-header{
+    position:fixed;
+    top:0; left:0; right:0;
+    z-index:20;
+    padding: calc(10px + env(safe-area-inset-top)) 20px 8px;
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    background: var(--page-bg);
+    max-width:430px;
+    margin:0 auto;
+  }
+  .board-title{
+    font-size:17px;
+    font-weight:700;
+    letter-spacing:-0.2px;
+    color:#5E5CE6;
+  }
+  .board-version{ font-size:11px; font-weight:500; color:#98989D; }
+
+  .canvas-wrap{
+    position:fixed;
+    top: var(--header-height, 0px);
+    left:0; right:0; bottom:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    touch-action:none;
+  }
+  .app-canvas{
+    width:430px;
+    display:flex;
+    flex-direction:column;
+    background: var(--page-bg);
+    transform-origin: center center;
+  }
+
+  /* ---------- JaxCards content dropped in, calculator/converter removed ---------- */
+  .card-stack{ padding: 0 16px calc(16px + env(safe-area-inset-bottom)); }
+  .test-card{
+    width:100%;
+    aspect-ratio: 1.586/1;
+    border-radius:16px;
+    border:1px solid rgba(255,255,255,.08);
+    box-shadow:0 6px 16px rgba(0,0,0,.35);
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-weight:700; font-size:15px;
+  }
+  .test-card:not(:first-child){ margin-top:-30px; }
+</style>
+</head>
+<body>
+
+<div class="board-header" id="boardHeader">
+  <div class="board-title">架構測試(卡匣內容)</div>
+  <div class="board-version">jaxmoney-arch</div>
+</div>
+
+<div class="canvas-wrap">
+<div class="app-canvas" id="appCanvas">
+  <div class="card-stack" id="cardStack"></div>
+</div>
+</div>
+
+<script>
+// Dummy cards — just enough to test whether this architecture's content
+// area reaches the true bottom edge, no real card data needed for this test.
+const COLORS = ["#4b3fb0","#1c3a63","#173d2c","#5c1f1f","#33255c","#173a3d","#4b3fb0","#1c3a63"];
+const stack = document.getElementById("cardStack");
+for (let i = 0; i < 8; i++) {
+  const el = document.createElement("div");
+  el.className = "test-card";
+  el.style.background = COLORS[i % COLORS.length];
+  el.textContent = "測試卡片 " + (i + 1);
+  stack.appendChild(el);
+}
+
+// ---------- Verbatim from JaxMoney ----------
+function trustedViewportHeight(){
+  const s = window.screen;
+  const o = s && s.orientation;
+  if(s && o && typeof o.type === "string"){
+    const isPortrait = o.type.indexOf("portrait") === 0;
+    const h = isPortrait ? s.height : s.width;
+    if(h) return h;
+  }
+  return window.innerHeight;
+}
+
+function setViewportHeight(){
+  const wrap = document.querySelector(".canvas-wrap");
+  const header = document.getElementById("boardHeader");
+  if(!header) return;
+  const headerHeight = header.offsetHeight;
+  document.documentElement.style.setProperty("--header-height", headerHeight + "px");
+  if(wrap){
+    wrap.style.top = headerHeight + "px";
+    wrap.style.bottom = "auto";
+    wrap.style.height = Math.max(0, trustedViewportHeight() - headerHeight) + "px";
+  }
+}
+
+function resetScrollPosition(){ window.scrollTo(0, 0); }
+
+let canvasScale = 1;
+function fitAppCanvas(){
+  const wrap = document.querySelector(".canvas-wrap");
+  const canvas = document.getElementById("appCanvas");
+  if(!wrap || !canvas) return;
+  canvas.style.transform = "none";
+  const designWidth = canvas.offsetWidth;
+  const naturalHeight = canvas.scrollHeight;
+  if(!designWidth || !naturalHeight) return;
+  const scaleW = wrap.clientWidth / designWidth;
+  const scaleH = wrap.clientHeight / naturalHeight;
+  const scale = Math.min(scaleW, scaleH);
+  canvasScale = scale;
+  canvas.style.transform = `scale(${scale})`;
+}
+
+function refreshLayout(){
+  setViewportHeight();
+  resetScrollPosition();
+  requestAnimationFrame(fitAppCanvas);
+}
+
+let stabilizeTimer = null;
+let stabilizeAttempts = 0;
+const QUIET_MS = 180, STABLE_CHECK_MS = 120, MAX_STABILIZE_ATTEMPTS = 8;
+
+function viewportKey(){
+  const wrap = document.querySelector(".canvas-wrap");
+  const header = document.getElementById("boardHeader");
+  const headerHeight = header ? header.offsetHeight : 0;
+  if(!wrap) return window.innerWidth + "x" + window.innerHeight + "x" + headerHeight;
+  return wrap.clientWidth + "x" + wrap.clientHeight + "x" + headerHeight;
+}
+function scheduleStableRefresh(){
+  if(stabilizeTimer) clearTimeout(stabilizeTimer);
+  stabilizeAttempts = 0;
+  stabilizeTimer = setTimeout(checkStable, QUIET_MS);
+}
+function checkStable(){
+  const before = viewportKey();
+  stabilizeTimer = setTimeout(()=>{
+    const after = viewportKey();
+    stabilizeAttempts++;
+    if(after === before || stabilizeAttempts >= MAX_STABILIZE_ATTEMPTS){
+      refreshLayout();
+    }else{
+      stabilizeTimer = setTimeout(checkStable, STABLE_CHECK_MS);
+    }
+  }, STABLE_CHECK_MS);
+}
+function delayedRefreshLayout(){
+  refreshLayout();
+  scheduleStableRefresh();
+}
+
+window.addEventListener("load", delayedRefreshLayout);
+window.addEventListener("resize", scheduleStableRefresh);
+if(window.visualViewport){
+  window.visualViewport.addEventListener("resize", scheduleStableRefresh);
+  window.visualViewport.addEventListener("scroll", scheduleStableRefresh);
+}
+window.addEventListener("orientationchange", delayedRefreshLayout);
+window.addEventListener("pageshow", delayedRefreshLayout);
+document.addEventListener("visibilitychange", ()=>{
+  if(document.visibilityState === "visible") delayedRefreshLayout();
+});
+delayedRefreshLayout();
+</script>
+
+</body>
+</html>
