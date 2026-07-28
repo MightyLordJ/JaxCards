@@ -271,6 +271,13 @@ function sizeCardList() {
 }
 
 function refreshLayout() {
+  // If a text input/textarea currently has focus, the keyboard is very
+  // likely open and iOS is already handling scrolling that field into
+  // view on its own — forcing scrollTo(0,0) and resizing #app here would
+  // fight that native behavior, which is what was pushing input sheets
+  // (like the backup password prompt) down behind the keyboard.
+  const active = document.activeElement;
+  if (active && (active.tagName === "INPUT" || active.tagName === "TEXTAREA")) return;
   setViewportHeight();
   resetScrollPosition();
   requestAnimationFrame(sizeCardList);
