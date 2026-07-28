@@ -120,14 +120,14 @@
     padding-top:14px;
     position:relative;
   }
-  #icon-row{ display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:16px; position:relative; }
-  .icon-btn.wide{ flex:0 0 auto; width:96px; border-radius:19px; position:absolute; top:0; left:50%; transform:translateX(-50%); }
+  #icon-row{ display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:16px; }
+  .icon-btn.wide{ flex:0 0 auto; width:96px; border-radius:19px; }
   /* Soft fade over #card-list's bottom edge so its cutoff isn't a hard
      line — purely decorative, sits on top of the scrollable list. */
   .card-list-fade{
     position:absolute; left:22px; right:22px; bottom:22px;
-    height:64px;
-    background: linear-gradient(to top, var(--bg) 0%, var(--bg) 35%, rgba(16,19,26,0) 100%);
+    height:36px;
+    background: linear-gradient(to top, var(--bg), rgba(16,19,26,0));
     pointer-events:none;
     z-index:2;
   }
@@ -274,7 +274,7 @@
 <div class="board-header" id="boardHeader">
   <h1>JaxCards</h1>
   <div style="display:flex;align-items:center;gap:10px;">
-    <span class="version">V2.5.0</span>
+    <span class="version">V2.5.1</span>
     <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
