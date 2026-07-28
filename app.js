@@ -909,86 +909,13 @@ $("import-pw-confirm-btn").onclick = async () => {
   if (success) closeBackupSheet();
 };
 
-// ---------- Viewport height stabilization ----------
-// iOS WebKit can, during cold-start/rotation/resume transitions, get
-// window.innerHeight/visualViewport.height (and by extension CSS's 100dvh)
-// durably stuck reporting a shorter-than-real height — this is what caused
-// the "ghost blank space" at the bottom of the screen. screen.height/
-// screen.width (paired with screen.orientation.type to know which is "up")
-// are static device metrics that don't suffer this. This is a direct port
-// of the exact fix already proven on-device in JaxMoney's
-// trustedViewportHeight(), including its quiet-period stabilization —
-// a PREVIOUS attempt at this in JaxCards applied a raw screen.height
-// override immediately on every event with no debounce, which fought
-// legitimate resizes (like the toolbar genuinely animating) and caused a
-// different regression (a white gap when it collapsed). The stabilization
-// here is what avoids that: it only commits a correction once the
-// viewport has stopped changing for a short window and reads the same on
-// two consecutive checks, rather than reacting to every event instantly.
-function trustedViewportHeight() {
-  const s = window.screen;
-  const o = s && s.orientation;
-  if (s && o && typeof o.type === "string") {
-    const isPortrait = o.type.indexOf("portrait") === 0;
-    const h = isPortrait ? s.height : s.width;
-    if (h) return h;
-  }
-  return window.innerHeight;
-}
-
-function applyAppHeight() {
-  const h = trustedViewportHeight() + "px";
-  // Correct html/body too, not just #app — if body's own native 100dvh is
-  // stuck on the same short value, its overflow:hidden would clip #app
-  // from below regardless of #app's own (correct) height.
-  document.documentElement.style.height = h;
-  document.body.style.height = h;
-  $("app").style.height = h;
-  if (typeof updateCardListAlignment === "function") updateCardListAlignment();
-}
-
-let vhStabilizeTimer = null;
-let vhStabilizeAttempts = 0;
-const VH_QUIET_MS = 180;
-const VH_STABLE_CHECK_MS = 120;
-const VH_MAX_ATTEMPTS = 8;
-
-function viewportKey() {
-  return window.innerWidth + "x" + window.innerHeight;
-}
-function scheduleStableAppHeight() {
-  if (vhStabilizeTimer) clearTimeout(vhStabilizeTimer);
-  vhStabilizeAttempts = 0;
-  vhStabilizeTimer = setTimeout(checkViewportStable, VH_QUIET_MS);
-}
-function checkViewportStable() {
-  const before = viewportKey();
-  vhStabilizeTimer = setTimeout(() => {
-    const after = viewportKey();
-    vhStabilizeAttempts++;
-    if (after === before || vhStabilizeAttempts >= VH_MAX_ATTEMPTS) {
-      applyAppHeight();
-    } else {
-      vhStabilizeTimer = setTimeout(checkViewportStable, VH_STABLE_CHECK_MS);
-    }
-  }, VH_STABLE_CHECK_MS);
-}
-function delayedApplyAppHeight() {
-  applyAppHeight();          // immediate best-effort, so nothing flashes blank
-  scheduleStableAppHeight(); // guaranteed follow-up once things actually settle
-}
-
-window.addEventListener("load", delayedApplyAppHeight);
-window.addEventListener("resize", scheduleStableAppHeight);
-if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", scheduleStableAppHeight);
-}
-window.addEventListener("orientationchange", delayedApplyAppHeight);
-window.addEventListener("pageshow", delayedApplyAppHeight);
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") delayedApplyAppHeight();
-});
-delayedApplyAppHeight();
+// #app now reaches the true top/bottom edges via position:fixed insets
+// (see its CSS) rather than any dvh/JS-computed height, so the height-
+// stabilization mechanism that used to live here is no longer needed —
+// setting an explicit height alongside fixed top/bottom insets would
+// actually be over-constrained and could reintroduce the exact bug this
+// was trying to fix. The card-list centering re-check on resize/
+// orientationchange is already wired near refreshCardList above.
 
 // ---------- boot ----------
 async function boot() {

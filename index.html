@@ -49,14 +49,18 @@
   button, .btn, .card-thumb, .icon-btn, .link{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
   input, textarea{ user-select:text; font-size:16px; } /* 16px stops iOS auto-zooming the page on focus */
   #app{
+    /* position:fixed with all four insets pinned to the true viewport
+       edges — same anchoring JaxMoney's .canvas-wrap uses. This doesn't
+       need any height number at all to reach the bottom (unlike
+       height:100dvh or a JS-computed pixel height), so it can't be thrown
+       off by iOS's dvh/innerHeight sometimes misreporting a shorter
+       value during cold-start/rotation/resume. */
+    position:fixed; top:0; right:0; bottom:0; left:0;
     max-width:480px;
     margin:0 auto;
-    height:100vh;
-    height:100dvh;
     overflow:hidden;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     display:flex; flex-direction:column;
-    position:relative;
   }
   /* Wider viewports (tablet / desktop browser): let the shell breathe
      instead of staying pinned to a phone-width column. */
@@ -254,7 +258,7 @@
     <div class="topbar">
       <h1>JaxCards</h1>
       <div style="display:flex;align-items:center;gap:10px;">
-        <span class="version">V2.0.3</span>
+        <span class="version">V2.0.4</span>
         <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
