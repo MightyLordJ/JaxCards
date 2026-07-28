@@ -33,11 +33,11 @@
     font-size: 16px;
   }
   *{box-sizing:border-box;}
-  html{ touch-action: manipulation; -webkit-text-size-adjust:100%; background:#ff00ff; } /* TEMP DIAGNOSTIC — was var(--bg) */
+  html{ touch-action: manipulation; -webkit-text-size-adjust:100%; background:var(--bg); }
   html, body{ height:100%; height:100dvh; overflow:hidden; overscroll-behavior:none; }
   body{
     margin:0;
-    background-color: #ff00ff; /* TEMP DIAGNOSTIC — bright magenta, unmistakable against #app's dark bg if it shows through anywhere; was var(--bg) */
+    background-color: var(--bg);
     color:var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", sans-serif;
     -webkit-font-smoothing:antialiased;
@@ -57,7 +57,14 @@
     max-width:480px;
     margin:0 auto;
     overflow:hidden;
-    background-color: #00ffff; /* TEMP DIAGNOSTIC layer 2 (#app) — cyan */
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(1200px 600px at 50% -10%, #1a1f2b 0%, var(--bg) 55%);
+    /* translateZ(0) establishes #app as the containing block for any
+       position:fixed descendant (like #card-list below) — without this,
+       a fixed descendant would anchor to the true device viewport instead
+       of #app's own (possibly narrower, centered) column. */
+    transform: translateZ(0);
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     display:flex; flex-direction:column;
   }
@@ -103,14 +110,11 @@
 
   /* ---------- Vault list ---------- */
   #vault-screen{
-    padding-bottom:calc(10px + env(safe-area-inset-bottom));
-    overflow:hidden; /* only #card-list inside scrolls, not this wrapper */
+    overflow:hidden; /* #card-list is position:fixed now and scrolls independently */
     display:flex; flex-direction:column;
-    background-color: #ffff00; /* TEMP DIAGNOSTIC layer 3 (#vault-screen) — yellow */
   }
   #vault-screen .topbar, #vault-screen .banner{ flex:none; }
   #vault-screen #empty-state{ flex:none; }
-  #vault-screen #card-list{ flex:1 1 auto; min-height:0; }
   .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
   .topbar h1{ font-size:17px; font-weight:700; letter-spacing:-0.2px; color:var(--accent); margin:0; }
   .topbar .version{ font-size:12px; color:var(--muted); font-weight:600; font-variant-numeric:tabular-nums; }
@@ -125,10 +129,21 @@
      grid (rest), but having two different card styles felt inconsistent,
      so it's back to one uniform stack for every card. */
   #card-list{
+    /* position:fixed, anchored to #app (its containing block, thanks to
+       #app's transform:translateZ(0)) instead of relying on flex:1 to
+       stretch within #vault-screen — `top` is set by JS (positionCardList)
+       to sit right below the icon row, the same way JaxMoney measures
+       header.offsetHeight for its .canvas-wrap. This pins both edges with
+       real measured/computed values instead of hoping flex-grow fills the
+       remaining space. */
+    position:fixed;
+    left: calc(env(safe-area-inset-left) + 22px);
+    right: calc(env(safe-area-inset-right) + 22px);
+    bottom: calc(10px + env(safe-area-inset-bottom));
     display:flex; flex-direction:column;
     justify-content:flex-start; /* default; JS adds .centered below once it measures the content actually fits */
     overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:8px;
-    background-color: #00ff00; /* TEMP DIAGNOSTIC layer 4 (#card-list) — green */
+    background-color: var(--bg);
   }
   #card-list.centered{ justify-content:center; }
   .card-stack{ display:flex; flex-direction:column; }
@@ -252,8 +267,6 @@
 </style>
 </head>
 <body>
-<div id="debug-readout" style="position:fixed;top:0;left:0;right:0;z-index:999;background:#000;color:#0f0;font-family:monospace;font-size:11px;line-height:1.5;padding:6px 8px;white-space:pre-wrap;"></div>
-
 <div id="app">
 
   <!-- VAULT (main) -->
@@ -261,7 +274,7 @@
     <div class="topbar">
       <h1>JaxCards</h1>
       <div style="display:flex;align-items:center;gap:10px;">
-        <span class="version">V2.0.7-debug</span>
+        <span class="version">V2.1.0</span>
         <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -271,7 +284,7 @@
         </button>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin:-6px 0 16px;">
+    <div id="icon-row" style="display:flex;align-items:center;gap:8px;margin:-6px 0 16px;">
       <button class="icon-btn" id="reorder-btn" aria-label="調整卡片順序">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="4" y1="6" x2="20" y2="6"/>
