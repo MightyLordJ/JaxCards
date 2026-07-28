@@ -252,43 +252,43 @@ function setViewportHeight() {
 
 function resetScrollPosition() { window.scrollTo(0, 0); }
 
-let canvasScale = 1;
-function fitAppCanvas() {
+// #app-canvas no longer scales — JaxMoney's uniform transform:scale()
+// shrinks width along with height (that's what was making the whole
+// column look too narrow, letterboxed on the sides). Since #app itself
+// is already correctly sized via trustedViewportHeight (real fix for the
+// underlying dvh bug), #card-list can just be sized directly to fill
+// exactly the remaining space below the icon row — full width always,
+// no side-effect on horizontal size.
+function sizeCardList() {
   const app = $("app");
-  const canvas = $("app-canvas");
-  if (!app || !canvas) return;
-  canvas.style.transform = "none";
-  const designWidth = canvas.offsetWidth;
-  const naturalHeight = canvas.scrollHeight;
-  if (!designWidth || !naturalHeight) return;
-  const scaleW = app.clientWidth / designWidth;
-  const scaleH = app.clientHeight / naturalHeight;
-  const scale = Math.min(scaleW, scaleH);
-  canvasScale = scale;
-  canvas.style.transform = `scale(${scale})`;
+  const iconRow = $("icon-row");
+  const list = $("card-list");
+  if (!app || !iconRow || !list) return;
+  const appRect = app.getBoundingClientRect();
+  const rowRect = iconRow.getBoundingClientRect();
+  const h = appRect.bottom - rowRect.bottom - 22; // 22 = .screen's own bottom padding
+  list.style.height = Math.max(0, h) + "px";
 }
 
 function refreshLayout() {
   setViewportHeight();
   resetScrollPosition();
-  requestAnimationFrame(fitAppCanvas);
+  requestAnimationFrame(sizeCardList);
 }
 
 // The quiet-period stabilization below only guards against iOS's transient
 // window-height glitch on launch/resume/rotation. It can't know when
 // slow-loading content (e.g. cards still being decrypted one by one)
-// finishes changing #app-canvas's natural height. A ResizeObserver catches
+// finishes changing the icon row's/list's layout. A ResizeObserver catches
 // that case directly, whenever it actually happens, regardless of how long
-// the load took — this piece was missed in the initial port from
-// JaxMoney and is the likely cause of scale looking different depending
-// on how many cards existed / how long rendering took.
+// the load took.
 function setupCanvasResizeObserver() {
   if (typeof ResizeObserver === "undefined") return;
   const canvas = $("app-canvas");
   const app = $("app");
   if (!canvas || !app) return;
   const observer = new ResizeObserver(() => {
-    requestAnimationFrame(fitAppCanvas);
+    requestAnimationFrame(sizeCardList);
   });
   observer.observe(canvas);
   observer.observe(app);

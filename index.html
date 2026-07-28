@@ -47,15 +47,16 @@
   button, .btn, .card-thumb, .icon-btn, .link{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
   input, textarea{ user-select:text; font-size:16px; } /* 16px stops iOS auto-zooming the page on focus */
 
-  /* ---------- JaxMoney's proven shell, ported verbatim ----------
+  /* ---------- Shell, adapted from JaxMoney's proven .board-header/.canvas-wrap pattern ----------
      .board-header: fixed, native size, never scaled — always crisp.
      #app (= JaxMoney's .canvas-wrap): fixed, top set by JS to sit right
-     below the header (header.offsetHeight), bottom:0.
-     #app-canvas (= JaxMoney's .app-canvas): the ONE thing that gets
-     transform:scale()'d to fit #app, computed from its own natural
-     scrollHeight vs #app's available box — same fitAppCanvas() logic,
-     unchanged. This sidesteps the whole dvh-measurement problem the same
-     way JaxMoney's real file does, instead of guessing at more CSS fixes. */
+     below the header (header.offsetHeight), sized off trustedViewportHeight
+     instead of CSS dvh — this is what actually solves the dvh-misreporting
+     bug. #app-canvas is a plain, unscaled, full-width column (JaxMoney's
+     own transform:scale() was dropped here: it shrinks width along with
+     height, which made the whole card column look too narrow). #card-list
+     inside it gets its height set directly by JS (sizeCardList) to exactly
+     fill the remaining space instead. */
   .board-header{
     position:fixed; top:0; left:0; right:0; z-index:20;
     padding: calc(10px + env(safe-area-inset-top)) 22px 8px;
@@ -76,7 +77,6 @@
     width:100%; max-width:480px;
     display:flex; flex-direction:column;
     background: var(--bg);
-    transform-origin: center center;
   }
   @media (min-width: 640px){
     .board-header{ max-width:720px; }
@@ -131,12 +131,11 @@
      grid (rest), but having two different card styles felt inconsistent,
      so it's back to one uniform stack for every card. */
   #card-list{
-    /* A fixed design-height "space" of its own — this is what makes the
-       outer #app-canvas scale calculation stable regardless of how many
-       cards actually exist: #app-canvas's natural scrollHeight is
-       (icon-row height + this fixed number), never card-count-dependent.
-       Cards beyond what fits here scroll internally. */
-    height: 700px;
+    /* Height is set directly by JS (sizeCardList) to exactly fill the
+       real remaining space below the icon row — no scaling involved, so
+       width is never affected. This CSS height is just a sensible
+       fallback before JS runs on first paint. */
+    height: 500px;
     overflow-y:auto; -webkit-overflow-scrolling:touch;
     display:flex; flex-direction:column;
   }
@@ -264,7 +263,7 @@
 <div class="board-header" id="boardHeader">
   <h1>JaxCards</h1>
   <div style="display:flex;align-items:center;gap:10px;">
-    <span class="version">V2.2.1</span>
+    <span class="version">V2.3.0</span>
     <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
