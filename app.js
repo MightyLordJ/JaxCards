@@ -216,7 +216,21 @@ async function refreshCardList() {
     el.onclick = () => openDetail(card.id);
     stack.appendChild(el);
   }
+  updateCardListAlignment();
 }
+
+// Centers the card stack when it's short enough to fit, falls back to
+// top-aligned + scrollable once there are enough cards to overflow — a
+// plain JS measurement instead of CSS `justify-content: safe center`,
+// since that keyword isn't supported before Safari 18.
+function updateCardListAlignment() {
+  const list = $("card-list");
+  const stack = $("card-stack");
+  if (!list || !stack) return;
+  list.classList.toggle("centered", stack.scrollHeight <= list.clientHeight);
+}
+window.addEventListener("resize", () => requestAnimationFrame(updateCardListAlignment));
+window.addEventListener("orientationchange", () => requestAnimationFrame(updateCardListAlignment));
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -923,7 +937,14 @@ function trustedViewportHeight() {
 }
 
 function applyAppHeight() {
-  $("app").style.height = trustedViewportHeight() + "px";
+  const h = trustedViewportHeight() + "px";
+  // Correct html/body too, not just #app — if body's own native 100dvh is
+  // stuck on the same short value, its overflow:hidden would clip #app
+  // from below regardless of #app's own (correct) height.
+  document.documentElement.style.height = h;
+  document.body.style.height = h;
+  $("app").style.height = h;
+  if (typeof updateCardListAlignment === "function") updateCardListAlignment();
 }
 
 let vhStabilizeTimer = null;
