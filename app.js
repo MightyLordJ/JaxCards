@@ -240,6 +240,12 @@ function updateCardListAlignment() {
   const list = $("card-list");
   const stack = $("card-stack");
   if (!list || !stack) return;
+  // #card-list's own box is always correctly sized (position:fixed with
+  // top/bottom pinned), regardless of how many cards there are. Giving
+  // .card-stack a min-height matching it guarantees the stack itself is
+  // never shorter than the available space — an invisible floor, exactly
+  // like backing the cards with an invisible full-height spacer.
+  stack.style.minHeight = list.clientHeight + "px";
   list.classList.toggle("centered", stack.scrollHeight <= list.clientHeight);
 }
 window.addEventListener("resize", () => requestAnimationFrame(updateCardListAlignment));
