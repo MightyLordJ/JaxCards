@@ -120,8 +120,8 @@
     padding-top:14px;
     position:relative;
   }
-  #icon-row{ display:flex; align-items:center; gap:8px; margin-bottom:16px; }
-  .icon-btn.wide{ flex:0 0 auto; width:96px; border-radius:19px; }
+  #icon-row{ display:flex; align-items:center; gap:8px; margin-bottom:16px; position:relative; min-height:38px; }
+  .icon-btn.wide{ flex:0 0 auto; width:96px; border-radius:19px; position:absolute; left:50%; top:50%; transform:translate(-50%, -50%); }
   /* Soft fade over #card-list's bottom edge so its cutoff isn't a hard
      line — purely decorative, sits on top of the scrollable list. */
   .card-list-fade{
@@ -274,7 +274,7 @@
 <div class="board-header" id="boardHeader">
   <h1>JaxCards</h1>
   <div style="display:flex;align-items:center;gap:10px;">
-    <span class="version">V2.5.4</span>
+    <span class="version">V2.5.5</span>
     <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
