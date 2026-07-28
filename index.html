@@ -118,10 +118,21 @@
   #vault-screen{
     display:flex; flex-direction:column;
     padding-top:14px;
+    position:relative;
   }
   #icon-row{ display:flex; align-items:center; gap:8px; margin-bottom:16px; }
+  /* Soft fade over #card-list's bottom edge so its cutoff isn't a hard
+     line — purely decorative, sits on top of the scrollable list. */
+  .card-list-fade{
+    position:absolute; left:22px; right:22px; bottom:22px;
+    height:40px;
+    background: linear-gradient(to top, var(--bg) 0%, rgba(16,19,26,0) 100%);
+    pointer-events:none;
+    z-index:2;
+  }
   .icon-btn{ width:38px;height:38px;border-radius:50%; background:var(--surface); border:1px solid var(--line); color:var(--muted); font-size:16px; display:flex; align-items:center; justify-content:center; }
   .icon-btn.primary{ background:linear-gradient(135deg, var(--accent), #4a48b8); border:none; color:#fff; }
+  .icon-btn.wide{ flex:1; width:auto; border-radius:19px; }
 
   .empty{ text-align:center; margin-top:60px; color:var(--muted); }
   .empty .mark{ width:52px;height:36px;border-radius:8px; margin:0 auto 18px; background:linear-gradient(135deg, var(--surface-2), var(--surface)); border:1px solid var(--line); }
@@ -263,7 +274,7 @@
 <div class="board-header" id="boardHeader">
   <h1>JaxCards</h1>
   <div style="display:flex;align-items:center;gap:10px;">
-    <span class="version">V2.3.1</span>
+    <span class="version">V2.4.0</span>
     <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -287,7 +298,7 @@
           <line x1="4" y1="18" x2="20" y2="18"/>
         </svg>
       </button>
-      <button class="icon-btn primary" id="add-card-btn" aria-label="新增卡片">
+      <button class="icon-btn primary wide" id="add-card-btn" aria-label="新增卡片">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="5" x2="12" y2="19"/>
           <line x1="5" y1="12" x2="19" y2="12"/>
@@ -301,6 +312,7 @@
     <div id="card-list">
       <div class="card-stack" id="card-stack"></div>
     </div>
+    <div class="card-list-fade"></div>
   </section>
 
 </div>
