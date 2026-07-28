@@ -274,6 +274,26 @@ function refreshLayout() {
   requestAnimationFrame(fitAppCanvas);
 }
 
+// The quiet-period stabilization below only guards against iOS's transient
+// window-height glitch on launch/resume/rotation. It can't know when
+// slow-loading content (e.g. cards still being decrypted one by one)
+// finishes changing #app-canvas's natural height. A ResizeObserver catches
+// that case directly, whenever it actually happens, regardless of how long
+// the load took — this piece was missed in the initial port from
+// JaxMoney and is the likely cause of scale looking different depending
+// on how many cards existed / how long rendering took.
+function setupCanvasResizeObserver() {
+  if (typeof ResizeObserver === "undefined") return;
+  const canvas = $("app-canvas");
+  const app = $("app");
+  if (!canvas || !app) return;
+  const observer = new ResizeObserver(() => {
+    requestAnimationFrame(fitAppCanvas);
+  });
+  observer.observe(canvas);
+  observer.observe(app);
+}
+
 let stabilizeTimer = null;
 let stabilizeAttempts = 0;
 const QUIET_MS = 180, STABLE_CHECK_MS = 120, MAX_STABILIZE_ATTEMPTS = 8;
@@ -319,6 +339,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") delayedRefreshLayout();
 });
 delayedRefreshLayout();
+setupCanvasResizeObserver();
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
