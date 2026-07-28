@@ -33,11 +33,11 @@
     font-size: 16px;
   }
   *{box-sizing:border-box;}
-  html{ touch-action: manipulation; -webkit-text-size-adjust:100%; background:#ffffff; } /* TEMP DIAGNOSTIC — was var(--bg) */
+  html{ touch-action: manipulation; -webkit-text-size-adjust:100%; background:#ff00ff; } /* TEMP DIAGNOSTIC — was var(--bg) */
   html, body{ height:100%; height:100dvh; overflow:hidden; overscroll-behavior:none; }
   body{
     margin:0;
-    background-color: #ffffff; /* TEMP DIAGNOSTIC — was var(--bg); revert once confirmed */
+    background-color: #ff00ff; /* TEMP DIAGNOSTIC — bright magenta, unmistakable against #app's dark bg if it shows through anywhere; was var(--bg) */
     color:var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", sans-serif;
     -webkit-font-smoothing:antialiased;
@@ -57,6 +57,7 @@
     max-width:480px;
     margin:0 auto;
     overflow:hidden;
+    background-color: #00ffff; /* TEMP DIAGNOSTIC layer 2 (#app) — cyan */
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
     display:flex; flex-direction:column;
   }
@@ -105,6 +106,7 @@
     padding-bottom:calc(10px + env(safe-area-inset-bottom));
     overflow:hidden; /* only #card-list inside scrolls, not this wrapper */
     display:flex; flex-direction:column;
+    background-color: #ffff00; /* TEMP DIAGNOSTIC layer 3 (#vault-screen) — yellow */
   }
   #vault-screen .topbar, #vault-screen .banner{ flex:none; }
   #vault-screen #empty-state{ flex:none; }
@@ -126,6 +128,7 @@
     display:flex; flex-direction:column;
     justify-content:flex-start; /* default; JS adds .centered below once it measures the content actually fits */
     overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:8px;
+    background-color: #00ff00; /* TEMP DIAGNOSTIC layer 4 (#card-list) — green */
   }
   #card-list.centered{ justify-content:center; }
   .card-stack{ display:flex; flex-direction:column; }
