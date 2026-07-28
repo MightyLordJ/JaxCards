@@ -175,6 +175,7 @@ function shiftDigits(digits, offset) {
 async function enterVault() {
   showScreen("vault-screen");
   await refreshCardList();
+  if (typeof refreshLayout === "function") requestAnimationFrame(refreshLayout);
 }
 
 async function refreshCardList() {
@@ -216,40 +217,108 @@ async function refreshCardList() {
     el.onclick = () => openDetail(card.id);
     stack.appendChild(el);
   }
-  updateCardListAlignment();
 }
 
-// #card-list is position:fixed (see its CSS) anchored to #app's own box;
-// its left/right/bottom are fixed via CSS, but its `top` depends on the
-// icon row's actual rendered height, which can shift slightly (font
-// rendering, safe-area insets) — so it's measured directly, the same way
-// JaxMoney measures header.offsetHeight for its .canvas-wrap, rather than
-// hoping flex-grow fills the remaining space on its own.
-function positionCardList() {
+// ---------- JaxMoney's shell mechanism, ported verbatim ----------
+// screen.height/width (paired with orientation.type) are static device
+// metrics that don't suffer from window.innerHeight/visualViewport.height
+// sometimes getting durably stuck on a wrong value during iOS cold-start/
+// rotation/resume — this is the same fix already proven on-device in
+// JaxMoney, applied the same way: size #app (the canvas-wrap) off this
+// trusted number instead of CSS dvh, then scale #app-canvas to fit.
+function trustedViewportHeight() {
+  const s = window.screen;
+  const o = s && s.orientation;
+  if (s && o && typeof o.type === "string") {
+    const isPortrait = o.type.indexOf("portrait") === 0;
+    const h = isPortrait ? s.height : s.width;
+    if (h) return h;
+  }
+  return window.innerHeight;
+}
+
+function setViewportHeight() {
   const app = $("app");
-  const iconRow = $("icon-row");
-  const list = $("card-list");
-  if (!app || !iconRow || !list) return;
-  const appRect = app.getBoundingClientRect();
-  const rowRect = iconRow.getBoundingClientRect();
-  list.style.top = (rowRect.bottom - appRect.top) + "px";
+  const header = $("boardHeader");
+  if (!header) return;
+  const headerHeight = header.offsetHeight;
+  document.documentElement.style.setProperty("--header-height", headerHeight + "px");
+  if (app) {
+    app.style.top = headerHeight + "px";
+    app.style.bottom = "auto";
+    app.style.height = Math.max(0, trustedViewportHeight() - headerHeight) + "px";
+  }
 }
 
-function updateCardListAlignment() {
-  positionCardList();
-  const list = $("card-list");
-  const stack = $("card-stack");
-  if (!list || !stack) return;
-  // #card-list's own box is always correctly sized (position:fixed with
-  // top/bottom pinned), regardless of how many cards there are. Giving
-  // .card-stack a min-height matching it guarantees the stack itself is
-  // never shorter than the available space — an invisible floor, exactly
-  // like backing the cards with an invisible full-height spacer.
-  stack.style.minHeight = list.clientHeight + "px";
-  list.classList.toggle("centered", stack.scrollHeight <= list.clientHeight);
+function resetScrollPosition() { window.scrollTo(0, 0); }
+
+let canvasScale = 1;
+function fitAppCanvas() {
+  const app = $("app");
+  const canvas = $("app-canvas");
+  if (!app || !canvas) return;
+  canvas.style.transform = "none";
+  const designWidth = canvas.offsetWidth;
+  const naturalHeight = canvas.scrollHeight;
+  if (!designWidth || !naturalHeight) return;
+  const scaleW = app.clientWidth / designWidth;
+  const scaleH = app.clientHeight / naturalHeight;
+  const scale = Math.min(scaleW, scaleH);
+  canvasScale = scale;
+  canvas.style.transform = `scale(${scale})`;
 }
-window.addEventListener("resize", () => requestAnimationFrame(updateCardListAlignment));
-window.addEventListener("orientationchange", () => requestAnimationFrame(updateCardListAlignment));
+
+function refreshLayout() {
+  setViewportHeight();
+  resetScrollPosition();
+  requestAnimationFrame(fitAppCanvas);
+}
+
+let stabilizeTimer = null;
+let stabilizeAttempts = 0;
+const QUIET_MS = 180, STABLE_CHECK_MS = 120, MAX_STABILIZE_ATTEMPTS = 8;
+
+function viewportKey() {
+  const app = $("app");
+  const header = $("boardHeader");
+  const headerHeight = header ? header.offsetHeight : 0;
+  if (!app) return window.innerWidth + "x" + window.innerHeight + "x" + headerHeight;
+  return app.clientWidth + "x" + app.clientHeight + "x" + headerHeight;
+}
+function scheduleStableRefresh() {
+  if (stabilizeTimer) clearTimeout(stabilizeTimer);
+  stabilizeAttempts = 0;
+  stabilizeTimer = setTimeout(checkStable, QUIET_MS);
+}
+function checkStable() {
+  const before = viewportKey();
+  stabilizeTimer = setTimeout(() => {
+    const after = viewportKey();
+    stabilizeAttempts++;
+    if (after === before || stabilizeAttempts >= MAX_STABILIZE_ATTEMPTS) {
+      refreshLayout();
+    } else {
+      stabilizeTimer = setTimeout(checkStable, STABLE_CHECK_MS);
+    }
+  }, STABLE_CHECK_MS);
+}
+function delayedRefreshLayout() {
+  refreshLayout();
+  scheduleStableRefresh();
+}
+
+window.addEventListener("load", delayedRefreshLayout);
+window.addEventListener("resize", scheduleStableRefresh);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", scheduleStableRefresh);
+  window.visualViewport.addEventListener("scroll", scheduleStableRefresh);
+}
+window.addEventListener("orientationchange", delayedRefreshLayout);
+window.addEventListener("pageshow", delayedRefreshLayout);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") delayedRefreshLayout();
+});
+delayedRefreshLayout();
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
@@ -927,15 +996,6 @@ $("import-pw-confirm-btn").onclick = async () => {
   const success = await importDataEncrypted(pendingImportFile, pw);
   if (success) closeBackupSheet();
 };
-
-// #app now reaches the true top/bottom edges via position:fixed insets
-// (see its CSS) rather than any dvh/JS-computed height, so the height-
-// stabilization mechanism that used to live here is no longer needed —
-// setting an explicit height alongside fixed top/bottom insets would
-// actually be over-constrained and could reintroduce the exact bug this
-// was trying to fix. The card-list centering re-check on resize/
-// orientationchange is already wired near refreshCardList above.
-window.addEventListener("load", () => requestAnimationFrame(updateCardListAlignment));
 
 // ---------- boot ----------
 async function boot() {

@@ -46,41 +46,47 @@
   }
   button, .btn, .card-thumb, .icon-btn, .link{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
   input, textarea{ user-select:text; font-size:16px; } /* 16px stops iOS auto-zooming the page on focus */
-  #app{
-    /* position:fixed with all four insets pinned to the true viewport
-       edges — same anchoring JaxMoney's .canvas-wrap uses. This doesn't
-       need any height number at all to reach the bottom (unlike
-       height:100dvh or a JS-computed pixel height), so it can't be thrown
-       off by iOS's dvh/innerHeight sometimes misreporting a shorter
-       value during cold-start/rotation/resume. */
-    position:fixed; top:0; right:0; bottom:0; left:0;
-    max-width:480px;
-    margin:0 auto;
-    overflow:hidden;
-    background-color: var(--bg);
-    background-image:
-      radial-gradient(1200px 600px at 50% -10%, #1a1f2b 0%, var(--bg) 55%);
-    /* translateZ(0) establishes #app as the containing block for any
-       position:fixed descendant (like #card-list below) — without this,
-       a fixed descendant would anchor to the true device viewport instead
-       of #app's own (possibly narrower, centered) column. */
-    transform: translateZ(0);
-    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-    display:flex; flex-direction:column;
+
+  /* ---------- JaxMoney's proven shell, ported verbatim ----------
+     .board-header: fixed, native size, never scaled — always crisp.
+     #app (= JaxMoney's .canvas-wrap): fixed, top set by JS to sit right
+     below the header (header.offsetHeight), bottom:0.
+     #app-canvas (= JaxMoney's .app-canvas): the ONE thing that gets
+     transform:scale()'d to fit #app, computed from its own natural
+     scrollHeight vs #app's available box — same fitAppCanvas() logic,
+     unchanged. This sidesteps the whole dvh-measurement problem the same
+     way JaxMoney's real file does, instead of guessing at more CSS fixes. */
+  .board-header{
+    position:fixed; top:0; left:0; right:0; z-index:20;
+    padding: calc(10px + env(safe-area-inset-top)) 22px 8px;
+    display:flex; align-items:baseline; justify-content:space-between;
+    background: var(--bg);
+    max-width:480px; margin:0 auto;
   }
-  /* Wider viewports (tablet / desktop browser): let the shell breathe
-     instead of staying pinned to a phone-width column. */
+  .board-header h1{ font-size:17px; font-weight:700; letter-spacing:-0.2px; color:var(--accent); margin:0; }
+  .board-header .version{ font-size:12px; color:var(--muted); font-weight:600; font-variant-numeric:tabular-nums; }
+  #app{
+    position:fixed;
+    top: var(--header-height, 0px);
+    left:0; right:0; bottom:0;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+  }
+  #app-canvas{
+    width:100%; max-width:480px;
+    display:flex; flex-direction:column;
+    background: var(--bg);
+    transform-origin: center center;
+  }
   @media (min-width: 640px){
-    #app{ max-width:720px; }
+    .board-header{ max-width:720px; }
+    #app-canvas{ max-width:720px; }
     .sheet-backdrop .sheet{ max-width:480px; }
   }
   .mono{ font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 
   /* ---------- Screens ---------- */
-  /* overflow-y:auto is a safety net for very short screens (a screen's
-     content should normally fit without scrolling, but if it doesn't,
-     it scrolls internally — never the whole page). */
-  .screen{ flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; padding:28px 22px; position:relative; }
+  .screen{ display:flex; flex-direction:column; padding:0 22px 22px; position:relative; }
   .hidden{ display:none !important; }
 
   /* ---------- Buttons ---------- */
@@ -110,14 +116,10 @@
 
   /* ---------- Vault list ---------- */
   #vault-screen{
-    overflow:hidden; /* #card-list is position:fixed now and scrolls independently */
     display:flex; flex-direction:column;
+    padding-top:14px;
   }
-  #vault-screen .topbar, #vault-screen .banner{ flex:none; }
-  #vault-screen #empty-state{ flex:none; }
-  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
-  .topbar h1{ font-size:17px; font-weight:700; letter-spacing:-0.2px; color:var(--accent); margin:0; }
-  .topbar .version{ font-size:12px; color:var(--muted); font-weight:600; font-variant-numeric:tabular-nums; }
+  #icon-row{ display:flex; align-items:center; gap:8px; margin-bottom:16px; }
   .icon-btn{ width:38px;height:38px;border-radius:50%; background:var(--surface); border:1px solid var(--line); color:var(--muted); font-size:16px; display:flex; align-items:center; justify-content:center; }
   .icon-btn.primary{ background:linear-gradient(135deg, var(--accent), #4a48b8); border:none; color:#fff; }
 
@@ -129,23 +131,15 @@
      grid (rest), but having two different card styles felt inconsistent,
      so it's back to one uniform stack for every card. */
   #card-list{
-    /* position:fixed, anchored to #app (its containing block, thanks to
-       #app's transform:translateZ(0)) instead of relying on flex:1 to
-       stretch within #vault-screen — `top` is set by JS (positionCardList)
-       to sit right below the icon row, the same way JaxMoney measures
-       header.offsetHeight for its .canvas-wrap. This pins both edges with
-       real measured/computed values instead of hoping flex-grow fills the
-       remaining space. */
-    position:fixed;
-    left: calc(env(safe-area-inset-left) + 22px);
-    right: calc(env(safe-area-inset-right) + 22px);
-    bottom: calc(10px + env(safe-area-inset-bottom));
+    /* A fixed design-height "space" of its own — this is what makes the
+       outer #app-canvas scale calculation stable regardless of how many
+       cards actually exist: #app-canvas's natural scrollHeight is
+       (icon-row height + this fixed number), never card-count-dependent.
+       Cards beyond what fits here scroll internally. */
+    height: 700px;
+    overflow-y:auto; -webkit-overflow-scrolling:touch;
     display:flex; flex-direction:column;
-    justify-content:flex-start; /* default; JS adds .centered below once it measures the content actually fits */
-    overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:8px;
-    background-color: var(--bg);
   }
-  #card-list.centered{ justify-content:center; }
   .card-stack{ display:flex; flex-direction:column; }
   .card-stack .card-thumb{ width:100%; }
   .card-stack .card-thumb:not(:first-child){ margin-top:-30px; }
@@ -267,24 +261,26 @@
 </style>
 </head>
 <body>
+<div class="board-header" id="boardHeader">
+  <h1>JaxCards</h1>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span class="version">V2.2.0</span>
+    <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
 <div id="app">
+<div id="app-canvas">
 
   <!-- VAULT (main) -->
   <section id="vault-screen" class="screen hidden">
-    <div class="topbar">
-      <h1>JaxCards</h1>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span class="version">V2.1.1</span>
-        <button class="icon-btn" id="backup-btn" aria-label="備份與還原">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-    <div id="icon-row" style="display:flex;align-items:center;gap:8px;margin:-6px 0 16px;">
+    <div id="icon-row">
       <button class="icon-btn" id="reorder-btn" aria-label="調整卡片順序">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="4" y1="6" x2="20" y2="6"/>
@@ -308,6 +304,7 @@
     </div>
   </section>
 
+</div>
 </div>
 
 <div id="toast" class="toast"></div>
